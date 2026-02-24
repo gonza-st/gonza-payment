@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/points
+    username: points
+    password: points
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+
+pg:
+  mock:
+    fail-rate: ${PG_MOCK_FAIL_RATE:0.0}
+    delay-ms: ${PG_MOCK_DELAY_MS:0}
