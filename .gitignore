@@ -10,3 +10,4 @@ build/
 *.iws
 out/
 .env
+load-test/results/

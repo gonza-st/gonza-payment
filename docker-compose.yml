@@ -24,6 +24,43 @@ services:
       PG_MOCK_DELAY_MS: "0"
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/products || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     depends_on:
       db:
         condition: service_healthy
+
+  seeder:
+    build:
+      context: ./load-test
+      dockerfile: Dockerfile.seed
+    volumes:
+      - ./load-test:/scripts
+    command: bash /scripts/seed.sh
+    depends_on:
+      api:
+        condition: service_healthy
+
+  k6:
+    image: grafana/k6
+    volumes:
+      - ./load-test:/scripts
+    environment:
+      - TARGET_VUS=${TARGET_VUS:-100}
+    command: run -e BASE_URL=http://api:8080/api -e TARGET_VUS=${TARGET_VUS:-100} /scripts/load-test.js
+    depends_on:
+      seeder:
+        condition: service_completed_successfully
+      report:
+        condition: service_started
+
+  report:
+    image: nginx:alpine
+    volumes:
+      - ./load-test/results:/usr/share/nginx/html:ro
+      - ./load-test/index.html:/usr/share/nginx/html/index.html:ro
+    ports:
+      - "3000:80"

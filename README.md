@@ -101,6 +101,55 @@ curl -s -X POST http://localhost:8080/api/users/<USER_ID>/gifticons/<GIFTICON_ID
 # -> {"gifticonId": "...", "status": "CONSUMED"}
 ```
 
+## 부하 테스트
+
+k6 + Docker Compose 기반 부하 테스트. 로컬 설치 없이 Docker만 있으면 실행 가능.
+
+### 실행
+
+```bash
+# 기본 (100 VU)
+docker compose up k6
+
+# 동시 사용자 수 변경
+TARGET_VUS=1000 docker compose up k6
+
+# setup.sh 사용 (테스트 후 브라우저 자동 오픈)
+bash load-test/setup.sh          # 기본 100 VU
+bash load-test/setup.sh 500      # 500 VU
+```
+
+### 결과 확인
+
+테스트가 끝나면 결과 리포트 서버가 자동으로 함께 뜹니다.
+
+- 리포트: http://localhost:3000
+- 파일: `load-test/results/report.html`, `load-test/results/summary.json`
+
+### 구성
+
+| 서비스 | 역할 |
+|--------|------|
+| `seeder` | API 호출로 상품 3개 + 사용자 30,000명 자동 생성 |
+| `k6` | 부하 테스트 실행 (충전 → 구매 → 사용 시나리오) |
+| `report` | nginx로 결과 HTML 서빙 (포트 3000) |
+
+### 부하 프로필
+
+| 단계 | 시간 | 동시 사용자 (VU) |
+|------|------|-----------------|
+| Ramp-up | 30s | 0 → 절반 |
+| Sustained | 2m | 절반 유지 |
+| Spike | 30s | 절반 → 최대 |
+| Sustained High | 1m | 최대 유지 |
+| Ramp-down | 30s | 최대 → 0 |
+
+### 성공 기준
+
+- HTTP 실패율 < 10%
+- p95 응답시간 < 2초
+- p99 응답시간 < 5초
+
 ## 정합성 전략
 
 - **포인트 충전 멱등성**: `(userId, idempotencyKey)` unique constraint + 동일 키 재호출 시 동일 결과 반환
