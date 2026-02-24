@@ -50,6 +50,7 @@ export default function () {
         ...HEADERS,
         "Idempotency-Key": uuidv4(),
       },
+      tags: { name: "충전" },
     }
   );
   check(chargeRes, {
@@ -61,7 +62,7 @@ export default function () {
   const purchaseRes = http.post(
     `${BASE_URL}/users/${userId}/gifticons`,
     JSON.stringify({ productId: productId }),
-    { headers: HEADERS }
+    { headers: HEADERS, tags: { name: "구매" } }
   );
   check(purchaseRes, {
     "구매 성공 (201)": (r) => r.status === 201,
@@ -73,7 +74,7 @@ export default function () {
     const consumeRes = http.post(
       `${BASE_URL}/users/${userId}/gifticons/${gifticonId}/consume`,
       null,
-      { headers: HEADERS }
+      { headers: HEADERS, tags: { name: "사용" } }
     );
     check(consumeRes, {
       "사용 성공 (200)": (r) => r.status === 200,
@@ -96,7 +97,7 @@ export function handleSummary(data) {
     return val !== undefined ? val : 0;
   };
   const fmt = (n, d = 2) => Number(n).toFixed(d);
-  const comma = (n) => Number(n).toLocaleString("en-US");
+  const comma = (n) => String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
   const checks = data.root_group.checks || [];
   const totalChecks = checks.reduce((s, c) => s + c.passes + c.fails, 0);

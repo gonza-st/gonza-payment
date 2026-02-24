@@ -60,7 +60,7 @@ services:
   report:
     image: nginx:alpine
     volumes:
-      - ./load-test/results:/usr/share/nginx/html:ro
+      - ./load-test/results:/usr/share/nginx/html
       - ./load-test/index.html:/usr/share/nginx/html/index.html:ro
     ports:
       - "3000:80"
