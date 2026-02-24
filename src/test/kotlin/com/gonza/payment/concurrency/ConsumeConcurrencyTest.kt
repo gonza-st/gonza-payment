@@ -29,14 +29,14 @@ import java.util.concurrent.atomic.AtomicInteger
 @Testcontainers
 @Tag("docker")
 class ConsumeConcurrencyTest {
-
     companion object {
         @Container
-        val postgres = PostgreSQLContainer("postgres:16").apply {
-            withDatabaseName("points")
-            withUsername("points")
-            withPassword("points")
-        }
+        val postgres =
+            PostgreSQLContainer("postgres:16").apply {
+                withDatabaseName("points")
+                withUsername("points")
+                withPassword("points")
+            }
 
         @JvmStatic
         @DynamicPropertySource
@@ -51,9 +51,13 @@ class ConsumeConcurrencyTest {
     }
 
     @Autowired lateinit var gifticonService: GifticonService
+
     @Autowired lateinit var userRepository: UserRepository
+
     @Autowired lateinit var walletRepository: WalletRepository
+
     @Autowired lateinit var gifticonProductRepository: GifticonProductRepository
+
     @Autowired lateinit var gifticonRepository: GifticonRepository
 
     private lateinit var userId: UUID

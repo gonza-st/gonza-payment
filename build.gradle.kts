@@ -49,13 +49,17 @@ allOpen {
     annotation("jakarta.persistence.Embeddable")
 }
 
-tasks.withType<Test> {
+tasks.named<Test>("test") {
     useJUnitPlatform {
         excludeTags("docker")
     }
 }
 
 tasks.register<Test>("testWithDocker") {
+    description = "Runs concurrency tests that require Docker"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("docker")
     }
