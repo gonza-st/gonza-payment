@@ -1,4 +1,66 @@
 <!DOCTYPE html>
-<html>
-<head><meta http-equiv="refresh" content="0; url=report.html"></head>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gonza-payment 테스트 결과</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;padding:2rem;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    h1{font-size:2rem;margin-bottom:.4rem;text-align:center}
+    .subtitle{color:#94a3b8;margin-bottom:3rem;font-size:.9rem;text-align:center}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;width:100%;max-width:800px}
+    a.card{display:block;background:#1e293b;border-radius:16px;padding:2rem;border:1px solid #334155;text-decoration:none;color:inherit;transition:all .2s}
+    a.card:hover{border-color:#60a5fa;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+    .card-icon{font-size:2.5rem;margin-bottom:1rem}
+    .card-title{font-size:1.2rem;font-weight:700;margin-bottom:.5rem}
+    .card-desc{font-size:.85rem;color:#94a3b8;line-height:1.6}
+    .card-file{display:inline-block;margin-top:1rem;font-size:.75rem;color:#64748b;background:#334155;padding:.2rem .6rem;border-radius:4px;font-family:monospace}
+    .card-missing{opacity:.4;pointer-events:none}
+    .footer{margin-top:3rem;font-size:.75rem;color:#475569;text-align:center}
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('a.card').forEach(card => {
+        const href = card.getAttribute('href');
+        fetch(href, { method: 'HEAD' }).then(r => {
+          if (!r.ok) card.classList.add('card-missing');
+        }).catch(() => card.classList.add('card-missing'));
+      });
+    });
+  </script>
+</head>
+<body>
+
+  <h1>gonza-payment</h1>
+  <p class="subtitle">테스트 결과 대시보드</p>
+
+  <div class="cards">
+    <a class="card" href="report.html">
+      <div class="card-icon">&#x1F4C8;</div>
+      <div class="card-title">부하 테스트</div>
+      <div class="card-desc">
+        충전 &rarr; 구매 &rarr; 사용 시나리오를 다수 VU로 병렬 실행.<br>
+        처리량, 응답 시간, 실패율을 측정합니다.
+      </div>
+      <span class="card-file">report.html</span>
+    </a>
+
+    <a class="card" href="idempotency-report.html">
+      <div class="card-icon">&#x1F6E1;</div>
+      <div class="card-title">중복결제 시나리오 테스트</div>
+      <div class="card-desc">
+        동일 Idempotency-Key로 동시 요청 시 중복결제 발생 여부 검증.<br>
+        응답 패턴 분포와 잔액 정합성을 확인합니다.
+      </div>
+      <span class="card-file">idempotency-report.html</span>
+    </a>
+  </div>
+
+  <div class="footer">
+    결과가 흐리게 표시되면 해당 테스트가 아직 실행되지 않은 것입니다.<br>
+    <code>bash load-test/setup.sh</code> · <code>bash load-test/setup-idempotency.sh</code>
+  </div>
+
+</body>
 </html>

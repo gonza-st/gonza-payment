@@ -5,7 +5,7 @@ import { SharedArray } from "k6/data";
 import { textSummary } from "https://jslib.k6.io/k6-summary/0.0.1/index.js";
 
 // seed.sh에서 생성한 데이터 로드
-const testData = JSON.parse(open("./results/users.json"));
+const testData = JSON.parse(open("../../results/users.json"));
 const userIds = new SharedArray("userIds", () => testData.userIds);
 const productIds = new SharedArray("productIds", () => testData.productIds);
 
@@ -265,8 +265,11 @@ ${timingRows.map(([label, key]) => {
 </body>
 </html>`;
 
+  const summary = textSummary(data, { indent: " ", enableColors: true });
+  const footer = "\n\n  ✅ 리포트: http://localhost:19000/report.html\n";
+
   return {
-    stdout: textSummary(data, { indent: " ", enableColors: true }),
+    stdout: summary + footer,
     "/scripts/results/summary.json": JSON.stringify(data, null, 2),
     "/scripts/results/report.html": html,
   };
