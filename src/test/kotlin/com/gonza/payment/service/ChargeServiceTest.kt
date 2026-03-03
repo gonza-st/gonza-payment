@@ -5,6 +5,7 @@ import com.gonza.payment.domain.ChargeStatus
 import com.gonza.payment.domain.Wallet
 import com.gonza.payment.exception.ConflictException
 import com.gonza.payment.exception.PgPaymentFailedException
+import com.gonza.payment.exception.UnprocessableException
 import com.gonza.payment.pg.PgApproveResult
 import com.gonza.payment.pg.PgClient
 import com.gonza.payment.repository.ChargeRepository
@@ -20,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.whenever
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionStatus
 import java.util.Optional
 import java.util.UUID
 
@@ -30,6 +33,8 @@ class ChargeServiceTest {
     @Mock lateinit var walletRepository: WalletRepository
     @Mock lateinit var pointLedgerRepository: PointLedgerRepository
     @Mock lateinit var pgClient: PgClient
+    @Mock lateinit var transactionManager: PlatformTransactionManager
+    @Mock lateinit var transactionStatus: TransactionStatus
 
     private lateinit var chargeService: ChargeService
     private val userId = UUID.randomUUID()
@@ -37,7 +42,11 @@ class ChargeServiceTest {
 
     @BeforeEach
     fun setUp() {
-        chargeService = ChargeService(chargeRepository, walletRepository, pointLedgerRepository, pgClient)
+        whenever(transactionManager.getTransaction(any())).thenReturn(transactionStatus)
+        chargeService = ChargeService(
+            chargeRepository, walletRepository, pointLedgerRepository,
+            pgClient, transactionManager
+        )
     }
 
     @Test
@@ -46,10 +55,14 @@ class ChargeServiceTest {
         val wallet = Wallet(userId = userId, balance = 5000L)
 
         whenever(chargeRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)).thenReturn(null)
-        doAnswer { it.arguments[0] }.whenever(chargeRepository).save(any<Charge>())
+        doAnswer { it.arguments[0] }.whenever(chargeRepository).saveAndFlush(any<Charge>())
         whenever(pgClient.approve(idempotencyKey, amount)).thenReturn(
             PgApproveResult(success = true, pgTransactionId = "pg-123")
         )
+        whenever(chargeRepository.findById(any<UUID>())).thenAnswer {
+            Optional.of(Charge(userId = userId, idempotencyKey = idempotencyKey, amount = amount))
+        }
+        doAnswer { it.arguments[0] }.whenever(chargeRepository).save(any<Charge>())
         whenever(walletRepository.addBalance(userId, amount)).thenReturn(1)
         doAnswer { it.arguments[0] }.whenever(pointLedgerRepository).save(any())
         whenever(walletRepository.findById(userId)).thenReturn(Optional.of(wallet))
@@ -81,7 +94,7 @@ class ChargeServiceTest {
     }
 
     @Test
-    fun `chargePoints - same idempotency key with different amount throws 409`() {
+    fun `chargePoints - same idempotency key with different amount throws 422`() {
         val existingCharge = Charge(
             userId = userId,
             idempotencyKey = idempotencyKey,
@@ -93,7 +106,7 @@ class ChargeServiceTest {
 
         assertThatThrownBy {
             chargeService.chargePoints(userId, 3000L, idempotencyKey)
-        }.isInstanceOf(ConflictException::class.java)
+        }.isInstanceOf(UnprocessableException::class.java)
             .hasMessageContaining("different amount")
     }
 
@@ -102,10 +115,14 @@ class ChargeServiceTest {
         val amount = 5000L
 
         whenever(chargeRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)).thenReturn(null)
-        doAnswer { it.arguments[0] }.whenever(chargeRepository).save(any<Charge>())
+        doAnswer { it.arguments[0] }.whenever(chargeRepository).saveAndFlush(any<Charge>())
         whenever(pgClient.approve(idempotencyKey, amount)).thenReturn(
             PgApproveResult(success = false, errorCode = "DECLINED")
         )
+        whenever(chargeRepository.findById(any<UUID>())).thenAnswer {
+            Optional.of(Charge(userId = userId, idempotencyKey = idempotencyKey, amount = amount))
+        }
+        doAnswer { it.arguments[0] }.whenever(chargeRepository).save(any<Charge>())
 
         assertThatThrownBy {
             chargeService.chargePoints(userId, amount, idempotencyKey)
@@ -127,5 +144,39 @@ class ChargeServiceTest {
             chargeService.chargePoints(userId, 5000L, idempotencyKey)
         }.isInstanceOf(ConflictException::class.java)
             .hasMessageContaining("failed")
+    }
+
+    @Test
+    fun `chargePoints - REQUESTED status charge throws conflict (still processing)`() {
+        val existingCharge = Charge(
+            userId = userId,
+            idempotencyKey = idempotencyKey,
+            amount = 5000L,
+            status = ChargeStatus.REQUESTED
+        )
+
+        whenever(chargeRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)).thenReturn(existingCharge)
+
+        assertThatThrownBy {
+            chargeService.chargePoints(userId, 5000L, idempotencyKey)
+        }.isInstanceOf(ConflictException::class.java)
+            .hasMessageContaining("being processed")
+    }
+
+    @Test
+    fun `chargePoints - PG_APPROVED status charge throws conflict (still processing)`() {
+        val existingCharge = Charge(
+            userId = userId,
+            idempotencyKey = idempotencyKey,
+            amount = 5000L,
+            status = ChargeStatus.PG_APPROVED
+        )
+
+        whenever(chargeRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)).thenReturn(existingCharge)
+
+        assertThatThrownBy {
+            chargeService.chargePoints(userId, 5000L, idempotencyKey)
+        }.isInstanceOf(ConflictException::class.java)
+            .hasMessageContaining("being processed")
     }
 }

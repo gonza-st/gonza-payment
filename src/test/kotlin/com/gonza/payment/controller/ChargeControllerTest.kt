@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.gonza.payment.domain.ChargeStatus
 import com.gonza.payment.dto.ChargeRequest
 import com.gonza.payment.dto.ChargeResponse
-import com.gonza.payment.exception.ConflictException
+import com.gonza.payment.exception.UnprocessableException
 import com.gonza.payment.service.ChargeService
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.whenever
@@ -66,12 +66,12 @@ class ChargeControllerTest {
     }
 
     @Test
-    fun `POST charges - different amount with same key returns 409`() {
+    fun `POST charges - different amount with same key returns 422`() {
         val userId = UUID.randomUUID()
         val idempotencyKey = "conflict-key"
 
         whenever(chargeService.chargePoints(userId, 3000L, idempotencyKey)).thenThrow(
-            ConflictException("Idempotency key already used with different amount")
+            UnprocessableException("Idempotency key already used with different amount")
         )
 
         mockMvc.post("/api/wallets/$userId/charges") {
@@ -79,7 +79,7 @@ class ChargeControllerTest {
             header("Idempotency-Key", idempotencyKey)
             content = objectMapper.writeValueAsString(ChargeRequest(amount = 3000L))
         }.andExpect {
-            status { isConflict() }
+            status { isUnprocessableEntity() }
         }
     }
 }
