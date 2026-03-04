@@ -26,4 +26,4 @@ echo ""
 docker compose -f "$PROJECT_ROOT/docker-compose.yml" up k6
 echo ""
 echo "=== 완료 ==="
-open "$RESULTS_DIR/report.html" 2>/dev/null || echo "  리포트: $RESULTS_DIR/report.html"
+open "$RESULTS_DIR/load/report.html" 2>/dev/null || echo "  리포트: $RESULTS_DIR/load/report.html"
