@@ -167,6 +167,7 @@ export function handleSummary(data) {
 </head>
 <body>
 
+  <a href="/" style="display:inline-block;margin-bottom:1.5rem;color:#94a3b8;text-decoration:none;font-size:.85rem;transition:color .2s" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#94a3b8'">&larr; 대시보드</a>
   <h1>부하 테스트 결과</h1>
   <p class="subtitle">gonza-payment · 포인트 충전 / 기프티콘 구매 · ${now} · 총 ${min}분 ${sec}초</p>
 
@@ -266,11 +267,11 @@ ${timingRows.map(([label, key]) => {
 </html>`;
 
   const summary = textSummary(data, { indent: " ", enableColors: true });
-  const footer = "\n\n  ✅ 리포트: http://localhost:19000/report.html\n";
+  const footer = "\n\n  ✅ 리포트: http://localhost:19000/load/report.html\n";
 
   return {
     stdout: summary + footer,
-    "/scripts/results/summary.json": JSON.stringify(data, null, 2),
-    "/scripts/results/report.html": html,
+    "/scripts/results/load/summary.json": JSON.stringify(data, null, 2),
+    "/scripts/results/load/report.html": html,
   };
 }

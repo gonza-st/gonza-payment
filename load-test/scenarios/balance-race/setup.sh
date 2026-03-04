@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 중복결제 시나리오 테스트
+# 잔액 경합 시나리오 테스트
 #
 # 사용법:
-#   bash load-test/scenarios/idempotency/setup.sh              # 기본값
-#   bash load-test/scenarios/idempotency/setup.sh 50 20 3      # 50 VU, 20회, 3건 동시
+#   bash load-test/scenarios/balance-race/setup.sh              # 기본값
+#   bash load-test/scenarios/balance-race/setup.sh 50 20 3      # 50 VU, 20회, 3건 동시
 #
 # 또는 docker compose 직접:
-#   PG_MOCK_DELAY_MS=2000 docker compose up k6-idem
+#   docker compose --profile balance-race up k6-balance-race
 #
-# 결과: localhost:3000
+# 결과: localhost:19000
 # =============================================================================
 
 set -euo pipefail
@@ -21,19 +21,18 @@ RESULTS_DIR="$PROJECT_ROOT/load-test/results"
 export TARGET_VUS="${1:-20}"
 export ITERATIONS="${2:-10}"
 export CONCURRENT_REQUESTS="${3:-2}"
-export PG_MOCK_DELAY_MS=2000
 
 TOTAL=$((TARGET_VUS * ITERATIONS))
 
-echo "=== 중복결제 시나리오 테스트 ==="
+echo "=== 잔액 경합 시나리오 테스트 ==="
 echo ""
 echo "  VU:        ${TARGET_VUS}"
 echo "  반복:      ${ITERATIONS}회"
-echo "  동시 요청: ${CONCURRENT_REQUESTS}건"
+echo "  동시 구매: ${CONCURRENT_REQUESTS}건"
 echo "  총:        ${TOTAL}건"
-echo "  PG 지연:   ${PG_MOCK_DELAY_MS}ms"
+echo "  상품:      스타벅스 아메리카노 (4,500원)"
 echo ""
-docker compose -f "$PROJECT_ROOT/docker-compose.yml" up k6-idem
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" --profile balance-race up k6-balance-race
 echo ""
 echo "=== 완료 ==="
-open "$RESULTS_DIR/idempotency/report.html" 2>/dev/null || echo "  리포트: $RESULTS_DIR/idempotency/report.html"
+open "$RESULTS_DIR/balance-race/report.html" 2>/dev/null || echo "  리포트: $RESULTS_DIR/balance-race/report.html"

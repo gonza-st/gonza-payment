@@ -16,16 +16,34 @@
     .card-title{font-size:1.2rem;font-weight:700;margin-bottom:.5rem}
     .card-desc{font-size:.85rem;color:#94a3b8;line-height:1.6}
     .card-file{display:inline-block;margin-top:1rem;font-size:.75rem;color:#64748b;background:#334155;padding:.2rem .6rem;border-radius:4px;font-family:monospace}
-    .card-missing{opacity:.4;pointer-events:none}
+    .card-missing{opacity:.4}
     .footer{margin-top:3rem;font-size:.75rem;color:#475569;text-align:center}
+    .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);background:#334155;color:#e2e8f0;padding:.8rem 1.5rem;border-radius:8px;font-size:.85rem;opacity:0;transition:all .3s;pointer-events:none;z-index:100}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
   </style>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('a.card').forEach(card => {
-        const href = card.getAttribute('href');
-        fetch(href, { method: 'HEAD' }).then(r => {
+      var toast = document.getElementById('toast');
+      var timer;
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(timer);
+        timer = setTimeout(function() { toast.classList.remove('show'); }, 2500);
+      }
+
+      document.querySelectorAll('a.card').forEach(function(card) {
+        var href = card.getAttribute('href');
+        fetch(href, { method: 'HEAD' }).then(function(r) {
           if (!r.ok) card.classList.add('card-missing');
-        }).catch(() => card.classList.add('card-missing'));
+        }).catch(function() { card.classList.add('card-missing'); });
+
+        card.addEventListener('click', function(e) {
+          if (card.classList.contains('card-missing')) {
+            e.preventDefault();
+            showToast('아직 실행되지 않은 테스트입니다. ./run-test.sh ' + href.split('/')[0] + ' 으로 실행하세요.');
+          }
+        });
       });
     });
   </script>
@@ -36,31 +54,42 @@
   <p class="subtitle">테스트 결과 대시보드</p>
 
   <div class="cards">
-    <a class="card" href="report.html">
+    <a class="card" href="/load/report.html">
       <div class="card-icon">&#x1F4C8;</div>
       <div class="card-title">부하 테스트</div>
       <div class="card-desc">
         충전 &rarr; 구매 &rarr; 사용 시나리오를 다수 VU로 병렬 실행.<br>
         처리량, 응답 시간, 실패율을 측정합니다.
       </div>
-      <span class="card-file">report.html</span>
+      <span class="card-file">load/report.html</span>
     </a>
 
-    <a class="card" href="idempotency-report.html">
+    <a class="card" href="/idempotency/report.html">
       <div class="card-icon">&#x1F6E1;</div>
       <div class="card-title">중복결제 시나리오 테스트</div>
       <div class="card-desc">
         동일 Idempotency-Key로 동시 요청 시 중복결제 발생 여부 검증.<br>
         응답 패턴 분포와 잔액 정합성을 확인합니다.
       </div>
-      <span class="card-file">idempotency-report.html</span>
+      <span class="card-file">idempotency/report.html</span>
+    </a>
+
+    <a class="card" href="/balance-race/report.html">
+      <div class="card-icon">&#x26A1;</div>
+      <div class="card-title">잔액 경합 시나리오 테스트</div>
+      <div class="card-desc">
+        잔액이 1건만 감당 가능한 상태에서 동시 구매 시 잔액 음수 방지 검증.<br>
+        응답 패턴 분포와 잔액 비음수 조건을 확인합니다.
+      </div>
+      <span class="card-file">balance-race/report.html</span>
     </a>
   </div>
 
   <div class="footer">
     결과가 흐리게 표시되면 해당 테스트가 아직 실행되지 않은 것입니다.<br>
-    <code>bash load-test/setup.sh</code> · <code>bash load-test/setup-idempotency.sh</code>
+    <code>./run-test.sh load</code> · <code>./run-test.sh idempotency</code> · <code>./run-test.sh balance-race</code>
   </div>
 
+<div class="toast" id="toast"></div>
 </body>
 </html>
