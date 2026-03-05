@@ -8,7 +8,8 @@ USERS_FILE="$RESULTS_DIR/users.json"
 USER_COUNT=30000
 PARALLEL_JOBS=50
 
-mkdir -p "$RESULTS_DIR"
+mkdir -p "$RESULTS_DIR" "$RESULTS_DIR/load" "$RESULTS_DIR/idempotency" "$RESULTS_DIR/balance-race"
+cp /scripts/index.html "$RESULTS_DIR/index.html"
 
 # 이미 시딩된 경우 스킵
 if [ -f "$USERS_FILE" ]; then

@@ -23,12 +23,21 @@ docker compose up --build
 ### 테스트
 
 ```bash
-# 단위 + 통합 + API 테스트
+# 단위 + 통합 + API 테스트 (H2 인메모리 DB)
 ./gradlew test
 
-# 동시성 테스트 (Docker 필요)
+# 동시성 테스트 (Testcontainers - Docker 필요)
 ./gradlew testWithDocker
 ```
+
+#### 테스트 구성
+
+| 레벨 | 명령어 | DB | 대상 |
+|------|--------|-----|------|
+| 단위 테스트 | `./gradlew test` | H2 | 서비스 로직 (Mockito) |
+| 통합 테스트 | `./gradlew test` | H2 | Repository, Controller (MockMvc) |
+| 동시성 테스트 | `./gradlew testWithDocker` | PostgreSQL (Testcontainers) | 동시 구매/사용 race condition |
+| 시나리오 테스트 | `./run-test.sh <시나리오>` | PostgreSQL | 부하, 중복결제, 잔액 경합 검증 |
 
 ## API
 
@@ -101,54 +110,83 @@ curl -s -X POST http://localhost:8080/api/users/<USER_ID>/gifticons/<GIFTICON_ID
 # -> {"gifticonId": "...", "status": "CONSUMED"}
 ```
 
-## 부하 테스트
+## 시나리오 테스트
 
-k6 + Docker Compose 기반 부하 테스트. 로컬 설치 없이 Docker만 있으면 실행 가능.
-
-### 실행
+k6 + Docker Compose 기반 시나리오 테스트. Docker만 있으면 실행 가능.
 
 ```bash
-# 기본 (100 VU)
-docker compose up k6
-
-# 동시 사용자 수 변경
-TARGET_VUS=1000 docker compose up k6
-
-# setup.sh 사용 (테스트 후 브라우저 자동 오픈)
-bash load-test/setup.sh          # 기본 100 VU
-bash load-test/setup.sh 500      # 500 VU
+./run-test.sh              # 사용법 출력
+./run-test.sh --build load # 코드 변경 후 이미지 재빌드하여 실행
+./run-test.sh clean        # 결과 + 시딩 데이터 초기화 (다음 실행 시 처음부터)
 ```
+
+테스트 완료 시 브라우저에서 리포트가 자동으로 열립니다.
+
+> 각 시나리오의 상세 흐름과 응답 패턴 분류는 `load-test/scenarios/<시나리오>/README.md` 참고
+
+### 1. 부하 테스트 (`load`)
+
+충전 → 구매 → 사용 전체 흐름을 다수 VU로 병렬 실행하여 처리량과 응답 시간을 측정한다.
+
+```bash
+./run-test.sh load         # 기본 100 VU
+./run-test.sh load 200     # 200 VU
+./run-test.sh load 1000    # 1000 VU 스트레스
+```
+
+| 인자 | 기본값 | 설명 |
+|------|--------|------|
+| VU 수 | 100 | 동시 가상 사용자 수 |
+
+**부하 프로필**: Ramp-up(30s) → 절반 유지(2m) → 스파이크(30s) → 최대 유지(1m) → Ramp-down(30s)
+
+**성공 기준**: HTTP 실패율 < 10%, p95 < 2초, p99 < 5초
+
+### 2. 중복결제 시나리오 (`idempotency`)
+
+동일 `Idempotency-Key`로 동시에 충전 요청을 보내 중복결제가 발생하는지 검증한다.
+PG 응답 지연(2초) 중 클라이언트가 재요청하는 상황을 시뮬레이션한다.
+
+```bash
+./run-test.sh idempotency           # 기본 20 VU, 10회 반복
+./run-test.sh idempotency 50 20     # 50 VU, 20회 반복
+```
+
+| 인자 | 기본값 | 설명 |
+|------|--------|------|
+| VU 수 | 20 | 동시 테스트 사용자 수 |
+| 반복 | 10 | VU당 충전 시도 횟수 |
+
+**테스트 흐름**: 잔액 조회 → 동일 키로 2건 동시 충전(`http.batch`) → 잔액 검증(+10,000원 정확히 1건)
+
+**성공 기준**: 중복결제 0건, 잔액 정합성 > 95%
+
+### 3. 잔액 경합 시나리오 (`balance-race`)
+
+잔액이 상품 가격(4,500원)과 동일한 상태에서 동시 구매 요청 시 잔액이 음수가 되지 않는지 검증한다.
+`subtractBalance`의 `WHERE balance >= :amount` 조건이 동시 부하에서도 정상 동작하는지 확인하는 회귀 테스트.
+
+```bash
+./run-test.sh balance-race           # 기본 20 VU, 10회 반복, 동시 2건
+./run-test.sh balance-race 50 20     # 50 VU, 20회 반복
+./run-test.sh balance-race 30 10 3   # 30 VU, 10회 반복, 동시 3건
+```
+
+| 인자 | 기본값 | 설명 |
+|------|--------|------|
+| VU 수 | 20 | 동시 테스트 사용자 수 |
+| 반복 | 10 | VU당 구매 시도 횟수 |
+| 동시 구매 | 2 | 동시에 보내는 구매 요청 수 |
+
+**테스트 흐름**: 잔액을 4,500원으로 설정 → 동일 상품 2건 동시 구매(`http.batch`) → 잔액 >= 0 검증
+
+**성공 기준**: 잔액 음수 0건, 초과 구매 0건, 잔액 정합성 > 95%
 
 ### 결과 확인
 
-테스트가 끝나면 결과 리포트 서버가 자동으로 함께 뜹니다.
-
-- 리포트: http://localhost:3000
-- 파일: `load-test/results/report.html`, `load-test/results/summary.json`
-
-### 구성
-
-| 서비스 | 역할 |
-|--------|------|
-| `seeder` | API 호출로 상품 3개 + 사용자 30,000명 자동 생성 |
-| `k6` | 부하 테스트 실행 (충전 → 구매 → 사용 시나리오) |
-| `report` | nginx로 결과 HTML 서빙 (포트 3000) |
-
-### 부하 프로필
-
-| 단계 | 시간 | 동시 사용자 (VU) |
-|------|------|-----------------|
-| Ramp-up | 30s | 0 → 절반 |
-| Sustained | 2m | 절반 유지 |
-| Spike | 30s | 절반 → 최대 |
-| Sustained High | 1m | 최대 유지 |
-| Ramp-down | 30s | 최대 → 0 |
-
-### 성공 기준
-
-- HTTP 실패율 < 10%
-- p95 응답시간 < 2초
-- p99 응답시간 < 5초
+- 대시보드: http://localhost:19000
+- 개별 리포트: `http://localhost:19000/<시나리오>/report.html`
+- 파일: `load-test/results/<시나리오>/report.html`
 
 ## 정합성 전략
 

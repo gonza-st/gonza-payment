@@ -16,4 +16,6 @@ class InsufficientBalanceException : ApiException(HttpStatus.BAD_REQUEST, "Insuf
 class PgPaymentFailedException(errorCode: String) :
     ApiException(HttpStatus.BAD_GATEWAY, "PG payment failed: $errorCode")
 
+class UnprocessableException(message: String) : ApiException(HttpStatus.UNPROCESSABLE_ENTITY, message)
+
 class AlreadyConsumedException : ApiException(HttpStatus.CONFLICT, "Gifticon already consumed")

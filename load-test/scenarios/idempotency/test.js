@@ -47,7 +47,7 @@ const ITERATIONS = parseInt(__ENV.ITERATIONS || "10");
 // init context의 open()은 handleSummary()에서도 접근 가능
 let initialBalances = {};
 try {
-  initialBalances = JSON.parse(open("../../results/initial-balances.json"));
+  initialBalances = JSON.parse(open("../../results/idempotency/initial-balances.json"));
 } catch (_) {
   // 스냅샷 파일이 없으면 빈 객체 (HTML에서 API 서버 연결 불가 안내)
 }
@@ -372,6 +372,7 @@ export function handleSummary(data) {
 </head>
 <body>
 
+  <a href="/" style="display:inline-block;margin-bottom:1.5rem;color:#94a3b8;text-decoration:none;font-size:.85rem;transition:color .2s" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#94a3b8'">&larr; 대시보드</a>
   <h1>중복결제 시나리오 테스트</h1>
   <p class="subtitle">gonza-payment · 멱등성 검증 · ${now} · 총 ${min}분 ${sec}초</p>
 
@@ -662,11 +663,11 @@ ${thresholds.map((t) => `        <tr><td>${t.name}</td><td>${t.cond}</td><td>${t
 </html>`;
 
   const summary = textSummary(data, { indent: " ", enableColors: true });
-  const footer = "\n\n  ✅ 리포트: http://localhost:19000/idempotency-report.html\n";
+  const footer = "\n\n  ✅ 리포트: http://localhost:19000/idempotency/report.html\n";
 
   return {
     stdout: summary + footer,
-    "/scripts/results/idempotency-summary.json": JSON.stringify(data, null, 2),
-    "/scripts/results/idempotency-report.html": html,
+    "/scripts/results/idempotency/summary.json": JSON.stringify(data, null, 2),
+    "/scripts/results/idempotency/report.html": html,
   };
 }
