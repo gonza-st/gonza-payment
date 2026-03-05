@@ -8,7 +8,11 @@ USERS_FILE="$RESULTS_DIR/users.json"
 USER_COUNT=30000
 PARALLEL_JOBS=50
 
-mkdir -p "$RESULTS_DIR" "$RESULTS_DIR/load" "$RESULTS_DIR/idempotency" "$RESULTS_DIR/balance-race"
+# 시나리오별 결과 디렉토리 자동 생성
+mkdir -p "$RESULTS_DIR"
+for scenario in /scripts/scenarios/*/; do
+  mkdir -p "$RESULTS_DIR/$(basename "$scenario")"
+done
 cp /scripts/index.html "$RESULTS_DIR/index.html"
 
 # 이미 시딩된 경우 스킵

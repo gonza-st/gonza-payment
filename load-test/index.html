@@ -83,11 +83,21 @@
       </div>
       <span class="card-file">balance-race/report.html</span>
     </a>
+
+    <a class="card" href="/consume-race/report.html">
+      <div class="card-icon">&#x1F3AB;</div>
+      <div class="card-title">기프티콘 동시 Consume 테스트</div>
+      <div class="card-desc">
+        동일 기프티콘에 동시 사용 요청 시 조건부 업데이트 검증.<br>
+        멱등 vs 409 정책 토론 자료를 제공합니다.
+      </div>
+      <span class="card-file">consume-race/report.html</span>
+    </a>
   </div>
 
   <div class="footer">
     결과가 흐리게 표시되면 해당 테스트가 아직 실행되지 않은 것입니다.<br>
-    <code>./run-test.sh load</code> · <code>./run-test.sh idempotency</code> · <code>./run-test.sh balance-race</code>
+    <code>./run-test.sh load</code> · <code>./run-test.sh idempotency</code> · <code>./run-test.sh balance-race</code> · <code>./run-test.sh consume-race</code>
   </div>
 
 <div class="toast" id="toast"></div>

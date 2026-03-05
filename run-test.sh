@@ -7,6 +7,7 @@
 #   ./run-test.sh load                  부하 테스트
 #   ./run-test.sh idempotency           중복결제 시나리오
 #   ./run-test.sh balance-race          잔액 경합 시나리오
+#   ./run-test.sh consume-race          기프티콘 동시 Consume 시나리오
 #
 # 옵션:
 #   ./run-test.sh load 200              VU 수 조절
@@ -53,6 +54,7 @@ usage() {
   echo -e "  ${GREEN}load${NC}            부하 테스트 (충전 → 구매 → 사용)"
   echo -e "  ${GREEN}idempotency${NC}     중복결제 시나리오 (동일 Idempotency-Key 동시 요청)"
   echo -e "  ${GREEN}balance-race${NC}    잔액 경합 시나리오 (동시 구매 잔액 음수 방지)"
+  echo -e "  ${GREEN}consume-race${NC}    기프티콘 동시 Consume (조건부 업데이트 검증)"
   echo ""
   echo -e "${BOLD}옵션:${NC}"
   echo -e "  ${YELLOW}--build${NC}         이미지 재빌드 후 실행"
@@ -63,6 +65,7 @@ usage() {
   echo -e "  ./run-test.sh load 200              # 200 VU"
   echo -e "  ./run-test.sh idempotency 50 20     # 50 VU, 20회 반복"
   echo -e "  ./run-test.sh balance-race 30 10 2  # 30 VU, 10회, 동시 2건"
+  echo -e "  ./run-test.sh consume-race 30 10 3  # 30 VU, 10회, 동시 3건"
   echo -e "  ./run-test.sh --build idempotency   # 코드 변경 후 재빌드"
   echo ""
   echo -e "${BOLD}결과:${NC}  http://localhost:19000"
@@ -128,6 +131,26 @@ run_balance_race() {
   open_report "balance-race/report.html"
 }
 
+run_consume_race() {
+  local vus="${1:-20}"
+  local iterations="${2:-10}"
+  local concurrent="${3:-2}"
+  export TARGET_VUS="$vus"
+  export ITERATIONS="$iterations"
+  export CONCURRENT_REQUESTS="$concurrent"
+
+  echo -e "${BLUE}=== 기프티콘 동시 Consume 시나리오 테스트 ===${NC}"
+  echo ""
+  echo "  VU:        ${vus}"
+  echo "  반복:      ${iterations}회"
+  echo "  동시 요청: ${concurrent}건"
+  echo ""
+  $DC --profile consume-race up $BUILD_FLAG k6-consume-race
+  echo ""
+  echo -e "${GREEN}=== 완료 ===${NC}"
+  open_report "consume-race/report.html"
+}
+
 # ── 인자 파싱 ──────────────────────────────────────────────────────────────
 
 BUILD_FLAG=""
@@ -152,6 +175,9 @@ case "$SCENARIO" in
     ;;
   balance-race)
     run_balance_race "${ARGS[1]:-}" "${ARGS[2]:-}" "${ARGS[3]:-}"
+    ;;
+  consume-race)
+    run_consume_race "${ARGS[1]:-}" "${ARGS[2]:-}" "${ARGS[3]:-}"
     ;;
   clean)
     do_clean

@@ -3,6 +3,7 @@
 #   docker compose up k6                                               부하 테스트
 #   PG_MOCK_DELAY_MS=2000 docker compose up k6-idem                     중복결제 시나리오 테스트
 #   docker compose --profile balance-race up k6-balance-race            잔액 경합 시나리오 테스트
+#   docker compose --profile consume-race up k6-consume-race            기프티콘 동시 Consume 테스트
 #
 #   TARGET_VUS=1000 docker compose up k6              VU 수 조절
 #
@@ -158,3 +159,26 @@ services:
       report:
         condition: service_started
     profiles: [balance-race]
+
+  # ── 기프티콘 동시 Consume 시나리오 테스트 ────────────────────────────────
+  k6-consume-race:
+    image: grafana/k6
+    volumes:
+      - ./load-test:/scripts
+    environment:
+      - TARGET_VUS=${TARGET_VUS:-20}
+      - ITERATIONS=${ITERATIONS:-10}
+      - CONCURRENT_REQUESTS=${CONCURRENT_REQUESTS:-2}
+    command: >-
+      run
+      -e BASE_URL=http://api:8080/api
+      -e TARGET_VUS=${TARGET_VUS:-20}
+      -e ITERATIONS=${ITERATIONS:-10}
+      -e CONCURRENT_REQUESTS=${CONCURRENT_REQUESTS:-2}
+      /scripts/scenarios/consume-race/test.js
+    depends_on:
+      seeder:
+        condition: service_completed_successfully
+      report:
+        condition: service_started
+    profiles: [consume-race]
