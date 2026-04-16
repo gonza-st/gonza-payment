@@ -6,6 +6,7 @@ import java.util.UUID
 data class PurchaseGifticonRequest(val productId: UUID)
 
 data class PurchaseGifticonResponse(
+    val purchaseId: UUID,
     val gifticonId: UUID,
     val code: String,
     val status: GifticonStatus,

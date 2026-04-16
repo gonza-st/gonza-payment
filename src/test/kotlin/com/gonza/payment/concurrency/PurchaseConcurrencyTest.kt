@@ -5,6 +5,7 @@ import com.gonza.payment.domain.User
 import com.gonza.payment.domain.Wallet
 import com.gonza.payment.repository.GifticonProductRepository
 import com.gonza.payment.repository.GifticonRepository
+import com.gonza.payment.repository.PurchaseRequestRepository
 import com.gonza.payment.repository.UserRepository
 import com.gonza.payment.repository.WalletRepository
 import com.gonza.payment.service.GifticonService
@@ -54,12 +55,14 @@ class PurchaseConcurrencyTest {
     @Autowired lateinit var walletRepository: WalletRepository
     @Autowired lateinit var gifticonProductRepository: GifticonProductRepository
     @Autowired lateinit var gifticonRepository: GifticonRepository
+    @Autowired lateinit var purchaseRequestRepository: PurchaseRequestRepository
 
     private lateinit var userId: UUID
     private lateinit var productId: UUID
 
     @BeforeEach
     fun setUp() {
+        purchaseRequestRepository.deleteAll()
         gifticonRepository.deleteAll()
         walletRepository.deleteAll()
         userRepository.deleteAll()
@@ -84,10 +87,10 @@ class PurchaseConcurrencyTest {
         val successCount = AtomicInteger(0)
         val failCount = AtomicInteger(0)
 
-        repeat(threadCount) {
+        repeat(threadCount) { index ->
             executor.submit {
                 try {
-                    gifticonService.purchaseGifticon(userId, productId)
+                    gifticonService.purchaseGifticon(userId, productId, "purchase-key-$index")
                     successCount.incrementAndGet()
                 } catch (e: Exception) {
                     failCount.incrementAndGet()
