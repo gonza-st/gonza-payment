@@ -16,6 +16,9 @@ class User(
     @Column(nullable = false)
     val name: String,
 
+    @Column(name = "phone_number", nullable = false)
+    val phoneNumber: String,
+
     @Column(nullable = false)
     val createdAt: Instant = Instant.now()
 )

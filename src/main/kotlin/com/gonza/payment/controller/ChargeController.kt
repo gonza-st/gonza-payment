@@ -2,7 +2,7 @@ package com.gonza.payment.controller
 
 import com.gonza.payment.dto.ChargeRequest
 import com.gonza.payment.dto.ChargeResponse
-import com.gonza.payment.service.ChargeService
+import com.gonza.payment.facade.ChargeFacade
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -15,7 +15,7 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/api")
-class ChargeController(private val chargeService: ChargeService) {
+class ChargeController(private val chargeFacade: ChargeFacade) {
 
     @PostMapping("/wallets/{userId}/charges")
     @ResponseStatus(HttpStatus.OK)
@@ -24,6 +24,6 @@ class ChargeController(private val chargeService: ChargeService) {
         @RequestHeader("Idempotency-Key") idempotencyKey: String,
         @RequestBody request: ChargeRequest
     ): ChargeResponse {
-        return chargeService.chargePoints(userId, request.amount, idempotencyKey)
+        return chargeFacade.chargePoints(userId, request.amount, idempotencyKey)
     }
 }

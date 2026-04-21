@@ -5,7 +5,7 @@ import com.gonza.payment.domain.ChargeStatus
 import com.gonza.payment.dto.ChargeRequest
 import com.gonza.payment.dto.ChargeResponse
 import com.gonza.payment.exception.UnprocessableException
-import com.gonza.payment.service.ChargeService
+import com.gonza.payment.facade.ChargeFacade
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
@@ -21,7 +21,7 @@ class ChargeControllerTest {
 
     @Autowired lateinit var mockMvc: MockMvc
     @Autowired lateinit var objectMapper: ObjectMapper
-    @MockBean lateinit var chargeService: ChargeService
+    @MockBean lateinit var chargeFacade: ChargeFacade
 
     @Test
     fun `POST charges - successful charge returns 200`() {
@@ -29,7 +29,7 @@ class ChargeControllerTest {
         val chargeId = UUID.randomUUID()
         val idempotencyKey = "test-key"
 
-        whenever(chargeService.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
+        whenever(chargeFacade.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
         )
 
@@ -51,7 +51,7 @@ class ChargeControllerTest {
         val chargeId = UUID.randomUUID()
         val idempotencyKey = "idempotent-key"
 
-        whenever(chargeService.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
+        whenever(chargeFacade.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
         )
 
@@ -70,7 +70,7 @@ class ChargeControllerTest {
         val userId = UUID.randomUUID()
         val idempotencyKey = "conflict-key"
 
-        whenever(chargeService.chargePoints(userId, 3000L, idempotencyKey)).thenThrow(
+        whenever(chargeFacade.chargePoints(userId, 3000L, idempotencyKey)).thenThrow(
             UnprocessableException("Idempotency key already used with different amount")
         )
 
