@@ -1,6 +1,7 @@
 package com.gonza.payment.facade
 
 import com.gonza.payment.domain.ChargeStatus
+import com.gonza.payment.domain.NotificationChannel
 import com.gonza.payment.dto.ChargeResponse
 import com.gonza.payment.service.ChargeService
 import com.gonza.payment.service.NotificationService
@@ -33,16 +34,28 @@ class ChargeFacadeTest {
     }
 
     @Test
-    fun `chargePoints - COMPLETED 상태면 알림 발송`() {
+    fun `chargePoints - COMPLETED 상태면 SMS 알림 발송`() {
         val chargeId = UUID.randomUUID()
         whenever(chargeService.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
         )
 
-        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey)
+        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey, NotificationChannel.SMS)
 
         assertThat(result.status).isEqualTo(ChargeStatus.COMPLETED)
-        verify(notificationService).notify(eq(userId), any(), any())
+        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.SMS))
+    }
+
+    @Test
+    fun `chargePoints - EMAIL 채널로 요청 시 EMAIL 알림 발송`() {
+        val chargeId = UUID.randomUUID()
+        whenever(chargeService.chargePoints(userId, 7000L, idempotencyKey)).thenReturn(
+            ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 7000L)
+        )
+
+        chargeFacade.chargePoints(userId, 7000L, idempotencyKey, NotificationChannel.EMAIL)
+
+        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
     }
 
     @Test
@@ -51,10 +64,10 @@ class ChargeFacadeTest {
         whenever(chargeService.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
         )
-        whenever(notificationService.notify(any(), any(), any()))
-            .thenThrow(RuntimeException("sms boom"))
+        whenever(notificationService.notify(any(), any(), any(), any()))
+            .thenThrow(RuntimeException("notify boom"))
 
-        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey)
+        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey, NotificationChannel.SMS)
 
         assertThat(result.status).isEqualTo(ChargeStatus.COMPLETED)
         assertThat(result.balance).isEqualTo(5000L)
@@ -67,8 +80,8 @@ class ChargeFacadeTest {
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.PG_APPROVED, balance = 0L)
         )
 
-        chargeFacade.chargePoints(userId, 5000L, idempotencyKey)
+        chargeFacade.chargePoints(userId, 5000L, idempotencyKey, NotificationChannel.SMS)
 
-        verify(notificationService, never()).notify(any(), any(), any())
+        verify(notificationService, never()).notify(any(), any(), any(), any())
     }
 }

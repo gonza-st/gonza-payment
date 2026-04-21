@@ -21,7 +21,7 @@ class WalletRepositoryTest {
 
     @BeforeEach
     fun setUp() {
-        val user = User(name = "TestUser", phoneNumber = "010-0000-0000")
+        val user = User(name = "TestUser", phoneNumber = "010-0000-0000", email = "test@example.com")
         userRepository.save(user)
         userId = user.id
         walletRepository.save(Wallet(userId = userId, balance = 10000L))

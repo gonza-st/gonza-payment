@@ -21,3 +21,8 @@ sms:
   mock:
     fail-rate: ${SMS_MOCK_FAIL_RATE:0.0}
     delay-ms: ${SMS_MOCK_DELAY_MS:0}
+
+email:
+  mock:
+    fail-rate: ${EMAIL_MOCK_FAIL_RATE:0.0}
+    delay-ms: ${EMAIL_MOCK_DELAY_MS:0}

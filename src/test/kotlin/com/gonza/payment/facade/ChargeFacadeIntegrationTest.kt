@@ -1,9 +1,12 @@
 package com.gonza.payment.facade
 
 import com.gonza.payment.domain.ChargeStatus
+import com.gonza.payment.domain.NotificationChannel
 import com.gonza.payment.domain.NotificationStatus
 import com.gonza.payment.domain.User
 import com.gonza.payment.domain.Wallet
+import com.gonza.payment.email.EmailClient
+import com.gonza.payment.email.EmailSendResult
 import com.gonza.payment.repository.NotificationRepository
 import com.gonza.payment.repository.UserRepository
 import com.gonza.payment.repository.WalletRepository
@@ -49,6 +52,8 @@ class ChargeFacadeIntegrationTest {
             registry.add("pg.mock.delay-ms") { "0" }
             registry.add("sms.mock.fail-rate") { "0.0" }
             registry.add("sms.mock.delay-ms") { "0" }
+            registry.add("email.mock.fail-rate") { "0.0" }
+            registry.add("email.mock.delay-ms") { "0" }
         }
     }
 
@@ -57,6 +62,7 @@ class ChargeFacadeIntegrationTest {
     @Autowired lateinit var walletRepository: WalletRepository
     @Autowired lateinit var notificationRepository: NotificationRepository
     @MockBean lateinit var smsClient: SmsClient
+    @MockBean lateinit var emailClient: EmailClient
 
     private lateinit var userId: UUID
 
@@ -66,18 +72,18 @@ class ChargeFacadeIntegrationTest {
         walletRepository.deleteAll()
         userRepository.deleteAll()
 
-        val user = User(name = "NotifyUser", phoneNumber = "010-1234-5678")
+        val user = User(name = "NotifyUser", phoneNumber = "010-1234-5678", email = "notify@example.com")
         userRepository.save(user)
         userId = user.id
         walletRepository.save(Wallet(userId = userId, balance = 0L))
     }
 
     @Test
-    fun `charge COMPLETED - notification 저장되고 status=SENT`() {
+    fun `SMS 채널 - charge COMPLETED - notification 저장되고 status=SENT`() {
         whenever(smsClient.send(any(), any(), any()))
             .thenReturn(SmsSendResult(success = true, messageId = "sms-ok"))
 
-        val response = chargeFacade.chargePoints(userId, 10_000L, "integ-key-1")
+        val response = chargeFacade.chargePoints(userId, 10_000L, "integ-key-1", NotificationChannel.SMS)
 
         assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
         assertThat(response.balance).isEqualTo(10_000L)
@@ -87,8 +93,10 @@ class ChargeFacadeIntegrationTest {
 
         val n = notifications.first()
         assertThat(n.status).isEqualTo(NotificationStatus.SENT)
+        assertThat(n.channel).isEqualTo(NotificationChannel.SMS)
         assertThat(n.toUserId).isEqualTo(userId)
         assertThat(n.phoneNumber).isEqualTo("010-1234-5678")
+        assertThat(n.email).isNull()
         assertThat(n.title).isEqualTo("포인트 충전 완료")
         assertThat(n.content).contains("10000P").contains("잔액 10000P")
     }
@@ -98,7 +106,7 @@ class ChargeFacadeIntegrationTest {
         whenever(smsClient.send(any(), any(), any()))
             .thenReturn(SmsSendResult(success = false, errorCode = "SMS_SEND_FAILED"))
 
-        val response = chargeFacade.chargePoints(userId, 5_000L, "integ-key-2")
+        val response = chargeFacade.chargePoints(userId, 5_000L, "integ-key-2", NotificationChannel.SMS)
 
         assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
         assertThat(response.balance).isEqualTo(5_000L)
@@ -113,9 +121,44 @@ class ChargeFacadeIntegrationTest {
         whenever(smsClient.send(any(), any(), any()))
             .thenThrow(RuntimeException("SMS gateway timeout"))
 
-        val response = chargeFacade.chargePoints(userId, 3_000L, "integ-key-3")
+        val response = chargeFacade.chargePoints(userId, 3_000L, "integ-key-3", NotificationChannel.SMS)
 
         assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
         assertThat(response.balance).isEqualTo(3_000L)
+    }
+
+    @Test
+    fun `EMAIL 채널 - charge COMPLETED - notification email 컬럼에 저장되고 SENT`() {
+        whenever(emailClient.send(any(), any(), any()))
+            .thenReturn(EmailSendResult(success = true, messageId = "email-ok"))
+
+        val response = chargeFacade.chargePoints(userId, 8_000L, "integ-key-4", NotificationChannel.EMAIL)
+
+        assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
+        assertThat(response.balance).isEqualTo(8_000L)
+
+        val notifications = notificationRepository.findAll()
+        assertThat(notifications).hasSize(1)
+
+        val n = notifications.first()
+        assertThat(n.status).isEqualTo(NotificationStatus.SENT)
+        assertThat(n.channel).isEqualTo(NotificationChannel.EMAIL)
+        assertThat(n.email).isEqualTo("notify@example.com")
+        assertThat(n.phoneNumber).isNull()
+    }
+
+    @Test
+    fun `EMAIL 실패 - notification status=FAILED, 충전은 COMPLETED 유지`() {
+        whenever(emailClient.send(any(), any(), any()))
+            .thenReturn(EmailSendResult(success = false, errorCode = "EMAIL_SEND_FAILED"))
+
+        val response = chargeFacade.chargePoints(userId, 2_000L, "integ-key-5", NotificationChannel.EMAIL)
+
+        assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
+
+        val notifications = notificationRepository.findAll()
+        assertThat(notifications).hasSize(1)
+        assertThat(notifications.first().status).isEqualTo(NotificationStatus.FAILED)
+        assertThat(notifications.first().channel).isEqualTo(NotificationChannel.EMAIL)
     }
 }

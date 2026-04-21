@@ -24,6 +24,6 @@ class ChargeController(private val chargeFacade: ChargeFacade) {
         @RequestHeader("Idempotency-Key") idempotencyKey: String,
         @RequestBody request: ChargeRequest
     ): ChargeResponse {
-        return chargeFacade.chargePoints(userId, request.amount, idempotencyKey)
+        return chargeFacade.chargePoints(userId, request.amount, idempotencyKey, request.channel)
     }
 }

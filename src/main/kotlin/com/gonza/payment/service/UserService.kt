@@ -20,7 +20,7 @@ class UserService(
 
     @Transactional
     fun createUser(request: CreateUserRequest): CreateUserResponse {
-        val user = User(name = request.name, phoneNumber = request.phoneNumber)
+        val user = User(name = request.name, phoneNumber = request.phoneNumber, email = request.email)
         userRepository.save(user)
         walletRepository.save(Wallet(userId = user.id))
         return CreateUserResponse(userId = user.id)

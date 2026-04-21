@@ -1,7 +1,9 @@
 package com.gonza.payment.service
 
 import com.gonza.payment.domain.Notification
+import com.gonza.payment.domain.NotificationChannel
 import com.gonza.payment.domain.NotificationStatus
+import com.gonza.payment.email.EmailClient
 import com.gonza.payment.exception.NotFoundException
 import com.gonza.payment.repository.NotificationRepository
 import com.gonza.payment.repository.UserRepository
@@ -17,11 +19,12 @@ class NotificationService(
     private val notificationRepository: NotificationRepository,
     private val userRepository: UserRepository,
     private val smsClient: SmsClient,
+    private val emailClient: EmailClient,
     transactionManager: PlatformTransactionManager
 ) {
     private val txTemplate = TransactionTemplate(transactionManager)
 
-    fun notify(userId: UUID, title: String, content: String): Notification {
+    fun notify(userId: UUID, title: String, content: String, channel: NotificationChannel): Notification {
         val user = userRepository.findById(userId)
             .orElseThrow { NotFoundException("User not found: $userId") }
 
@@ -31,21 +34,26 @@ class NotificationService(
                 Notification(
                     title = title,
                     content = content,
+                    channel = channel,
                     toUserId = userId,
-                    phoneNumber = user.phoneNumber
+                    phoneNumber = if (channel == NotificationChannel.SMS) user.phoneNumber else null,
+                    email = if (channel == NotificationChannel.EMAIL) user.email else null
                 )
             )
         }!!
 
-        // Phase 2 (TX 밖): 외부 SMS 호출 — DB 커넥션 미점유
-        val result = smsClient.send(user.phoneNumber, title, content)
+        // Phase 2 (TX 밖): 외부 호출 — DB 커넥션 미점유
+        val success = when (channel) {
+            NotificationChannel.SMS -> smsClient.send(user.phoneNumber, title, content).success
+            NotificationChannel.EMAIL -> emailClient.send(user.email, title, content).success
+        }
 
         // Phase 3 (TX-2): 결과 반영
         return txTemplate.execute {
             val notification = notificationRepository.findById(saved.id)
                 .orElseThrow { IllegalStateException("Notification ${saved.id} disappeared") }
 
-            notification.status = if (result.success) {
+            notification.status = if (success) {
                 NotificationStatus.SENT
             } else {
                 NotificationStatus.FAILED

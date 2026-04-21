@@ -25,11 +25,18 @@ class Notification(
     @Column(nullable = false)
     var status: NotificationStatus = NotificationStatus.REQUESTED,
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    val channel: NotificationChannel,
+
     @Column(name = "to_user_id", nullable = false)
     val toUserId: UUID,
 
-    @Column(name = "phone_number", nullable = false)
-    val phoneNumber: String,
+    @Column(name = "phone_number", nullable = true)
+    val phoneNumber: String? = null,
+
+    @Column(name = "email", nullable = true)
+    val email: String? = null,
 
     @Column(name = "requested_at", nullable = false)
     val requestedAt: Instant = Instant.now(),
