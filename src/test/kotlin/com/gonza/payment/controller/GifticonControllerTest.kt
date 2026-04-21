@@ -27,10 +27,13 @@ class GifticonControllerTest {
     fun `POST purchase - returns 201 with gifticon`() {
         val userId = UUID.randomUUID()
         val productId = UUID.randomUUID()
+        val purchaseId = UUID.randomUUID()
         val gifticonId = UUID.randomUUID()
+        val idempotencyKey = "test-key-001"
 
-        whenever(gifticonService.purchaseGifticon(userId, productId)).thenReturn(
+        whenever(gifticonService.purchaseGifticon(userId, productId, idempotencyKey)).thenReturn(
             PurchaseGifticonResponse(
+                purchaseId = purchaseId,
                 gifticonId = gifticonId,
                 code = "ABC123",
                 status = GifticonStatus.ISSUED,
@@ -40,9 +43,11 @@ class GifticonControllerTest {
 
         mockMvc.post("/api/users/$userId/gifticons") {
             contentType = MediaType.APPLICATION_JSON
+            header("Idempotency-Key", idempotencyKey)
             content = objectMapper.writeValueAsString(PurchaseGifticonRequest(productId = productId))
         }.andExpect {
             status { isCreated() }
+            jsonPath("$.purchaseId") { value(purchaseId.toString()) }
             jsonPath("$.gifticonId") { value(gifticonId.toString()) }
             jsonPath("$.code") { value("ABC123") }
             jsonPath("$.status") { value("ISSUED") }
