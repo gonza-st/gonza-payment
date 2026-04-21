@@ -16,3 +16,8 @@ pg:
   mock:
     fail-rate: ${PG_MOCK_FAIL_RATE:0.0}
     delay-ms: ${PG_MOCK_DELAY_MS:0}
+
+sms:
+  mock:
+    fail-rate: ${SMS_MOCK_FAIL_RATE:0.0}
+    delay-ms: ${SMS_MOCK_DELAY_MS:0}

@@ -64,7 +64,7 @@ class ChargeConcurrencyTest {
         walletRepository.deleteAll()
         userRepository.deleteAll()
 
-        val user = User(name = "ChargeConcurrencyUser")
+        val user = User(name = "ChargeConcurrencyUser", phoneNumber = "010-0000-0000")
         userRepository.save(user)
         userId = user.id
         walletRepository.save(Wallet(userId = userId, balance = 0L))

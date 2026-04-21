@@ -68,7 +68,7 @@ class PurchaseConcurrencyTest {
         userRepository.deleteAll()
         gifticonProductRepository.deleteAll()
 
-        val user = User(name = "ConcurrencyUser")
+        val user = User(name = "ConcurrencyUser", phoneNumber = "010-0000-0000")
         userRepository.save(user)
         userId = user.id
 

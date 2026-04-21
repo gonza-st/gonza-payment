@@ -36,7 +36,7 @@ class UserServiceTest {
         whenever(userRepository.save(any<User>())).thenAnswer { it.arguments[0] }
         whenever(walletRepository.save(any<Wallet>())).thenAnswer { it.arguments[0] }
 
-        val result = userService.createUser(CreateUserRequest(name = "TestUser"))
+        val result = userService.createUser(CreateUserRequest(name = "TestUser", phoneNumber = "010-0000-0000"))
 
         assertThat(result.userId).isNotNull()
     }
