@@ -26,7 +26,7 @@ class ChargeRepositoryTest {
 
     @BeforeEach
     fun setUp() {
-        val user = User(name = "TestUser", phoneNumber = "010-0000-0000")
+        val user = User(name = "TestUser", phoneNumber = "010-0000-0000", email = "test@example.com")
         userRepository.save(user)
         userId = user.id
         walletRepository.save(Wallet(userId = userId))
@@ -63,7 +63,7 @@ class ChargeRepositoryTest {
 
     @Test
     fun `same idempotencyKey for different users is allowed`() {
-        val user2 = User(name = "User2", phoneNumber = "010-0000-0001")
+        val user2 = User(name = "User2", phoneNumber = "010-0000-0001", email = "user2@example.com")
         userRepository.save(user2)
 
         chargeRepository.save(Charge(userId = userId, idempotencyKey = "shared-key", amount = 5000L))

@@ -20,5 +20,8 @@ class User(
     val phoneNumber: String,
 
     @Column(nullable = false)
+    val email: String,
+
+    @Column(nullable = false)
     val createdAt: Instant = Instant.now()
 )
