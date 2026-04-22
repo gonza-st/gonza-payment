@@ -79,86 +79,87 @@ class ChargeFacadeIntegrationTest {
     }
 
     @Test
-    fun `SMS 채널 - charge COMPLETED - notification 저장되고 status=SENT`() {
+    fun `charge COMPLETED - SMS와 EMAIL notification 2건 저장되고 모두 SENT`() {
         whenever(smsClient.send(any(), any(), any()))
             .thenReturn(SmsSendResult(success = true, messageId = "sms-ok"))
+        whenever(emailClient.send(any(), any(), any()))
+            .thenReturn(EmailSendResult(success = true, messageId = "email-ok"))
 
-        val response = chargeFacade.chargePoints(userId, 10_000L, "integ-key-1", NotificationChannel.SMS)
+        val response = chargeFacade.chargePoints(userId, 10_000L, "integ-key-1")
 
         assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
         assertThat(response.balance).isEqualTo(10_000L)
 
         val notifications = notificationRepository.findAll()
-        assertThat(notifications).hasSize(1)
+        assertThat(notifications).hasSize(2)
 
-        val n = notifications.first()
-        assertThat(n.status).isEqualTo(NotificationStatus.SENT)
-        assertThat(n.channel).isEqualTo(NotificationChannel.SMS)
-        assertThat(n.toUserId).isEqualTo(userId)
-        assertThat(n.phoneNumber).isEqualTo("010-1234-5678")
-        assertThat(n.email).isNull()
-        assertThat(n.title).isEqualTo("포인트 충전 완료")
-        assertThat(n.content).contains("10000P").contains("잔액 10000P")
+        val sms = notifications.first { it.channel == NotificationChannel.SMS }
+        assertThat(sms.status).isEqualTo(NotificationStatus.SENT)
+        assertThat(sms.toUserId).isEqualTo(userId)
+        assertThat(sms.phoneNumber).isEqualTo("010-1234-5678")
+        assertThat(sms.email).isNull()
+        assertThat(sms.title).isEqualTo("포인트 충전 완료")
+        assertThat(sms.content).contains("10000P").contains("잔액 10000P")
+
+        val email = notifications.first { it.channel == NotificationChannel.EMAIL }
+        assertThat(email.status).isEqualTo(NotificationStatus.SENT)
+        assertThat(email.email).isEqualTo("notify@example.com")
+        assertThat(email.phoneNumber).isNull()
     }
 
     @Test
-    fun `SMS 실패 - notification status=FAILED, 충전은 COMPLETED 유지`() {
+    fun `SMS 실패 + EMAIL 성공 - SMS는 FAILED, EMAIL은 SENT, 충전은 COMPLETED 유지`() {
         whenever(smsClient.send(any(), any(), any()))
             .thenReturn(SmsSendResult(success = false, errorCode = "SMS_SEND_FAILED"))
+        whenever(emailClient.send(any(), any(), any()))
+            .thenReturn(EmailSendResult(success = true, messageId = "email-ok"))
 
-        val response = chargeFacade.chargePoints(userId, 5_000L, "integ-key-2", NotificationChannel.SMS)
+        val response = chargeFacade.chargePoints(userId, 5_000L, "integ-key-2")
 
         assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
         assertThat(response.balance).isEqualTo(5_000L)
 
         val notifications = notificationRepository.findAll()
-        assertThat(notifications).hasSize(1)
-        assertThat(notifications.first().status).isEqualTo(NotificationStatus.FAILED)
+        assertThat(notifications).hasSize(2)
+        assertThat(notifications.first { it.channel == NotificationChannel.SMS }.status)
+            .isEqualTo(NotificationStatus.FAILED)
+        assertThat(notifications.first { it.channel == NotificationChannel.EMAIL }.status)
+            .isEqualTo(NotificationStatus.SENT)
     }
 
     @Test
-    fun `SMS 예외 - 충전은 여전히 COMPLETED 반환`() {
+    fun `SMS 예외 + EMAIL 성공 - 충전은 COMPLETED, EMAIL notification은 SENT로 저장`() {
         whenever(smsClient.send(any(), any(), any()))
             .thenThrow(RuntimeException("SMS gateway timeout"))
-
-        val response = chargeFacade.chargePoints(userId, 3_000L, "integ-key-3", NotificationChannel.SMS)
-
-        assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
-        assertThat(response.balance).isEqualTo(3_000L)
-    }
-
-    @Test
-    fun `EMAIL 채널 - charge COMPLETED - notification email 컬럼에 저장되고 SENT`() {
         whenever(emailClient.send(any(), any(), any()))
             .thenReturn(EmailSendResult(success = true, messageId = "email-ok"))
 
-        val response = chargeFacade.chargePoints(userId, 8_000L, "integ-key-4", NotificationChannel.EMAIL)
+        val response = chargeFacade.chargePoints(userId, 3_000L, "integ-key-3")
 
         assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
-        assertThat(response.balance).isEqualTo(8_000L)
+        assertThat(response.balance).isEqualTo(3_000L)
 
         val notifications = notificationRepository.findAll()
-        assertThat(notifications).hasSize(1)
-
-        val n = notifications.first()
-        assertThat(n.status).isEqualTo(NotificationStatus.SENT)
-        assertThat(n.channel).isEqualTo(NotificationChannel.EMAIL)
-        assertThat(n.email).isEqualTo("notify@example.com")
-        assertThat(n.phoneNumber).isNull()
+        val email = notifications.first { it.channel == NotificationChannel.EMAIL }
+        assertThat(email.status).isEqualTo(NotificationStatus.SENT)
     }
 
     @Test
-    fun `EMAIL 실패 - notification status=FAILED, 충전은 COMPLETED 유지`() {
+    fun `EMAIL 실패 + SMS 성공 - EMAIL은 FAILED, SMS는 SENT, 충전은 COMPLETED 유지`() {
+        whenever(smsClient.send(any(), any(), any()))
+            .thenReturn(SmsSendResult(success = true, messageId = "sms-ok"))
         whenever(emailClient.send(any(), any(), any()))
             .thenReturn(EmailSendResult(success = false, errorCode = "EMAIL_SEND_FAILED"))
 
-        val response = chargeFacade.chargePoints(userId, 2_000L, "integ-key-5", NotificationChannel.EMAIL)
+        val response = chargeFacade.chargePoints(userId, 2_000L, "integ-key-4")
 
         assertThat(response.status).isEqualTo(ChargeStatus.COMPLETED)
 
         val notifications = notificationRepository.findAll()
-        assertThat(notifications).hasSize(1)
-        assertThat(notifications.first().status).isEqualTo(NotificationStatus.FAILED)
-        assertThat(notifications.first().channel).isEqualTo(NotificationChannel.EMAIL)
+        assertThat(notifications).hasSize(2)
+        assertThat(notifications.first { it.channel == NotificationChannel.SMS }.status)
+            .isEqualTo(NotificationStatus.SENT)
+        assertThat(notifications.first { it.channel == NotificationChannel.EMAIL }.status)
+            .isEqualTo(NotificationStatus.FAILED)
     }
 }

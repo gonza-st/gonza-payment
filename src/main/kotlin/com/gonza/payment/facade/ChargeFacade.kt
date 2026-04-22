@@ -19,21 +19,24 @@ class ChargeFacade(
     fun chargePoints(
         userId: UUID,
         amount: Long,
-        idempotencyKey: String,
-        channel: NotificationChannel
+        idempotencyKey: String
     ): ChargeResponse {
         val response = chargeService.chargePoints(userId, amount, idempotencyKey)
 
         if (response.status == ChargeStatus.COMPLETED) {
-            runCatching {
-                notificationService.notify(
-                    userId = userId,
-                    title = "포인트 충전 완료",
-                    content = "${amount}P가 충전되었습니다. 현재 잔액 ${response.balance}P",
-                    channel = channel
-                )
-            }.onFailure { ex ->
-                log.warn("$channel 알림 실패 (chargeId=${response.chargeId}): ${ex.message}")
+            val title = "포인트 충전 완료"
+            val content = "${amount}P가 충전되었습니다. 현재 잔액 ${response.balance}P"
+            listOf(NotificationChannel.SMS, NotificationChannel.EMAIL).forEach { channel ->
+                runCatching {
+                    notificationService.notify(
+                        userId = userId,
+                        title = title,
+                        content = content,
+                        channel = channel
+                    )
+                }.onFailure { ex ->
+                    log.warn("$channel 알림 실패 (chargeId=${response.chargeId}): ${ex.message}")
+                }
             }
         }
         return response

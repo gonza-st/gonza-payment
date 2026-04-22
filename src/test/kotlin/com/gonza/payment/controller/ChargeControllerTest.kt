@@ -29,7 +29,7 @@ class ChargeControllerTest {
         val chargeId = UUID.randomUUID()
         val idempotencyKey = "test-key"
 
-        whenever(chargeFacade.chargePoints(userId, 5000L, idempotencyKey, com.gonza.payment.domain.NotificationChannel.SMS)).thenReturn(
+        whenever(chargeFacade.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
         )
 
@@ -51,7 +51,7 @@ class ChargeControllerTest {
         val chargeId = UUID.randomUUID()
         val idempotencyKey = "idempotent-key"
 
-        whenever(chargeFacade.chargePoints(userId, 5000L, idempotencyKey, com.gonza.payment.domain.NotificationChannel.SMS)).thenReturn(
+        whenever(chargeFacade.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
         )
 
@@ -70,7 +70,7 @@ class ChargeControllerTest {
         val userId = UUID.randomUUID()
         val idempotencyKey = "conflict-key"
 
-        whenever(chargeFacade.chargePoints(userId, 3000L, idempotencyKey, com.gonza.payment.domain.NotificationChannel.SMS)).thenThrow(
+        whenever(chargeFacade.chargePoints(userId, 3000L, idempotencyKey)).thenThrow(
             UnprocessableException("Idempotency key already used with different amount")
         )
 

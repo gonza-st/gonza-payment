@@ -34,32 +34,36 @@ class ChargeFacadeTest {
     }
 
     @Test
-    fun `chargePoints - COMPLETED 상태면 SMS 알림 발송`() {
+    fun `chargePoints - COMPLETED 상태면 SMS와 EMAIL 두 채널로 모두 알림 발송`() {
         val chargeId = UUID.randomUUID()
         whenever(chargeService.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
         )
 
-        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey, NotificationChannel.SMS)
+        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey)
 
         assertThat(result.status).isEqualTo(ChargeStatus.COMPLETED)
         verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.SMS))
-    }
-
-    @Test
-    fun `chargePoints - EMAIL 채널로 요청 시 EMAIL 알림 발송`() {
-        val chargeId = UUID.randomUUID()
-        whenever(chargeService.chargePoints(userId, 7000L, idempotencyKey)).thenReturn(
-            ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 7000L)
-        )
-
-        chargeFacade.chargePoints(userId, 7000L, idempotencyKey, NotificationChannel.EMAIL)
-
         verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
     }
 
     @Test
-    fun `chargePoints - 알림 예외가 터져도 ChargeResponse 정상 반환`() {
+    fun `chargePoints - SMS notify가 예외여도 EMAIL notify는 호출된다`() {
+        val chargeId = UUID.randomUUID()
+        whenever(chargeService.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
+            ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
+        )
+        whenever(notificationService.notify(eq(userId), any(), any(), eq(NotificationChannel.SMS)))
+            .thenThrow(RuntimeException("sms boom"))
+
+        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey)
+
+        assertThat(result.status).isEqualTo(ChargeStatus.COMPLETED)
+        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
+    }
+
+    @Test
+    fun `chargePoints - 모든 알림 예외가 터져도 ChargeResponse 정상 반환`() {
         val chargeId = UUID.randomUUID()
         whenever(chargeService.chargePoints(userId, 5000L, idempotencyKey)).thenReturn(
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.COMPLETED, balance = 5000L)
@@ -67,7 +71,7 @@ class ChargeFacadeTest {
         whenever(notificationService.notify(any(), any(), any(), any()))
             .thenThrow(RuntimeException("notify boom"))
 
-        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey, NotificationChannel.SMS)
+        val result = chargeFacade.chargePoints(userId, 5000L, idempotencyKey)
 
         assertThat(result.status).isEqualTo(ChargeStatus.COMPLETED)
         assertThat(result.balance).isEqualTo(5000L)
@@ -80,7 +84,7 @@ class ChargeFacadeTest {
             ChargeResponse(chargeId = chargeId, status = ChargeStatus.PG_APPROVED, balance = 0L)
         )
 
-        chargeFacade.chargePoints(userId, 5000L, idempotencyKey, NotificationChannel.SMS)
+        chargeFacade.chargePoints(userId, 5000L, idempotencyKey)
 
         verify(notificationService, never()).notify(any(), any(), any(), any())
     }
