@@ -26,3 +26,23 @@ email:
   mock:
     fail-rate: ${EMAIL_MOCK_FAIL_RATE:0.0}
     delay-ms: ${EMAIL_MOCK_DELAY_MS:0}
+
+push:
+  mock:
+    fail-rate: ${PUSH_MOCK_FAIL_RATE:0.0}
+    delay-ms: ${PUSH_MOCK_DELAY_MS:0}
+
+kakao:
+  mock:
+    fail-rate: ${KAKAO_MOCK_FAIL_RATE:0.0}
+    delay-ms: ${KAKAO_MOCK_DELAY_MS:0}
+
+slack:
+  mock:
+    fail-rate: ${SLACK_MOCK_FAIL_RATE:0.0}
+    delay-ms: ${SLACK_MOCK_DELAY_MS:0}
+
+marketing-hub:
+  mock:
+    fail-rate: ${MARKETING_HUB_MOCK_FAIL_RATE:0.0}
+    delay-ms: ${MARKETING_HUB_MOCK_DELAY_MS:0}

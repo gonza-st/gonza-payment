@@ -5,8 +5,12 @@ import com.gonza.payment.domain.NotificationChannel
 import com.gonza.payment.domain.NotificationStatus
 import com.gonza.payment.email.EmailClient
 import com.gonza.payment.exception.NotFoundException
+import com.gonza.payment.kakao.KakaoAlimtalkClient
+import com.gonza.payment.marketing.MarketingHubClient
+import com.gonza.payment.push.PushClient
 import com.gonza.payment.repository.NotificationRepository
 import com.gonza.payment.repository.UserRepository
+import com.gonza.payment.slack.SlackClient
 import com.gonza.payment.sms.SmsClient
 import org.springframework.stereotype.Service
 import org.springframework.transaction.PlatformTransactionManager
@@ -20,6 +24,10 @@ class NotificationService(
     private val userRepository: UserRepository,
     private val smsClient: SmsClient,
     private val emailClient: EmailClient,
+    private val pushClient: PushClient,
+    private val kakaoAlimtalkClient: KakaoAlimtalkClient,
+    private val slackClient: SlackClient,
+    private val marketingHubClient: MarketingHubClient,
     transactionManager: PlatformTransactionManager
 ) {
     private val txTemplate = TransactionTemplate(transactionManager)
@@ -36,7 +44,7 @@ class NotificationService(
                     content = content,
                     channel = channel,
                     toUserId = userId,
-                    phoneNumber = if (channel == NotificationChannel.SMS) user.phoneNumber else null,
+                    phoneNumber = if (channel == NotificationChannel.SMS || channel == NotificationChannel.KAKAO_ALIMTALK) user.phoneNumber else null,
                     email = if (channel == NotificationChannel.EMAIL) user.email else null
                 )
             )
@@ -46,6 +54,10 @@ class NotificationService(
         val success = when (channel) {
             NotificationChannel.SMS -> smsClient.send(user.phoneNumber, title, content).success
             NotificationChannel.EMAIL -> emailClient.send(user.email, title, content).success
+            NotificationChannel.PUSH -> pushClient.send(userId.toString(), title, content).success
+            NotificationChannel.KAKAO_ALIMTALK -> kakaoAlimtalkClient.send(user.phoneNumber, title, content).success
+            NotificationChannel.SLACK -> slackClient.send(userId.toString(), title, content).success
+            NotificationChannel.MARKETING_HUB -> marketingHubClient.send(userId.toString(), title, content).success
         }
 
         // Phase 3 (TX-2): 결과 반영

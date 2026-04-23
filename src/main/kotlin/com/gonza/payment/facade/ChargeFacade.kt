@@ -26,7 +26,14 @@ class ChargeFacade(
         if (response.status == ChargeStatus.COMPLETED) {
             val title = "포인트 충전 완료"
             val content = "${amount}P가 충전되었습니다. 현재 잔액 ${response.balance}P"
-            listOf(NotificationChannel.SMS, NotificationChannel.EMAIL).forEach { channel ->
+            listOf(
+                NotificationChannel.SMS,
+                NotificationChannel.EMAIL,
+                NotificationChannel.PUSH,
+                NotificationChannel.KAKAO_ALIMTALK,
+                NotificationChannel.SLACK,
+                NotificationChannel.MARKETING_HUB
+            ).forEach { channel ->
                 runCatching {
                     notificationService.notify(
                         userId = userId,
