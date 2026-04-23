@@ -30,7 +30,7 @@ class ChargeFacadeTest {
 
     @BeforeEach
     fun setUp() {
-        chargeFacade = ChargeFacade(chargeService, notificationService)
+        chargeFacade = ChargeFacade(chargeService, notificationService, channelTimeoutMs = 0L)
     }
 
     @Test
