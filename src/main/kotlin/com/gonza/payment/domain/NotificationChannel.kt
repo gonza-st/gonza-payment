@@ -2,5 +2,9 @@ package com.gonza.payment.domain
 
 enum class NotificationChannel {
     SMS,
-    EMAIL
+    EMAIL,
+    PUSH,
+    KAKAO_ALIMTALK,
+    SLACK,
+    MARKETING_HUB
 }

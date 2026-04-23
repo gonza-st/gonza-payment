@@ -7,8 +7,12 @@ import com.gonza.payment.domain.User
 import com.gonza.payment.email.EmailClient
 import com.gonza.payment.email.EmailSendResult
 import com.gonza.payment.exception.NotFoundException
+import com.gonza.payment.kakao.KakaoAlimtalkClient
+import com.gonza.payment.marketing.MarketingHubClient
+import com.gonza.payment.push.PushClient
 import com.gonza.payment.repository.NotificationRepository
 import com.gonza.payment.repository.UserRepository
+import com.gonza.payment.slack.SlackClient
 import com.gonza.payment.sms.SmsClient
 import com.gonza.payment.sms.SmsSendResult
 import org.assertj.core.api.Assertions.assertThat
@@ -36,6 +40,10 @@ class NotificationServiceTest {
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var smsClient: SmsClient
     @Mock lateinit var emailClient: EmailClient
+    @Mock lateinit var pushClient: PushClient
+    @Mock lateinit var kakaoAlimtalkClient: KakaoAlimtalkClient
+    @Mock lateinit var slackClient: SlackClient
+    @Mock lateinit var marketingHubClient: MarketingHubClient
     @Mock lateinit var transactionManager: PlatformTransactionManager
     @Mock lateinit var transactionStatus: TransactionStatus
 
@@ -48,7 +56,8 @@ class NotificationServiceTest {
     fun setUp() {
         whenever(transactionManager.getTransaction(any())).thenReturn(transactionStatus)
         notificationService = NotificationService(
-            notificationRepository, userRepository, smsClient, emailClient, transactionManager
+            notificationRepository, userRepository, smsClient, emailClient,
+            pushClient, kakaoAlimtalkClient, slackClient, marketingHubClient, transactionManager
         )
     }
 
