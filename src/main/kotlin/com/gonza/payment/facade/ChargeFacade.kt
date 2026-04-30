@@ -1,12 +1,16 @@
 package com.gonza.payment.facade
 
+import com.gonza.payment.datalake.ChargeEvent
+import com.gonza.payment.datalake.DataLakeClient
 import com.gonza.payment.domain.ChargeStatus
 import com.gonza.payment.domain.NotificationChannel
 import com.gonza.payment.domain.NotificationStatus
 import com.gonza.payment.domain.User
 import com.gonza.payment.dto.ChargeResponse
 import com.gonza.payment.exception.NotFoundException
+import com.gonza.payment.fds.FdsClient
 import com.gonza.payment.repository.UserRepository
+import com.gonza.payment.reward.RewardService
 import com.gonza.payment.service.ChargeService
 import com.gonza.payment.service.NotificationService
 import org.slf4j.LoggerFactory
@@ -24,6 +28,10 @@ class ChargeFacade(
     private val chargeService: ChargeService,
     private val notificationService: NotificationService,
     private val userRepository: UserRepository,
+    // [시나리오6] 타 팀 요청으로 추가된 의존성들 — ChargeFacade 가 결제 외 책임을 떠안는다
+    private val fdsClient: FdsClient,                  // 보안팀: 일정 금액 이상 사전 검사
+    private val rewardService: RewardService,          // 그로스팀: 최초 충전 쿠폰 지급
+    private val dataLakeClient: DataLakeClient,        // 데이터팀: 충전 이벤트 적재
     @Value("\${notification.channel.timeout-ms:0}") private val channelTimeoutMs: Long,
     private val clock: Clock = Clock.systemDefaultZone(),
     private val backoff: (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) }
@@ -35,6 +43,15 @@ class ChargeFacade(
         amount: Long,
         idempotencyKey: String
     ): ChargeResponse {
+        // [시나리오6] 보안팀: 일정 금액 이상이면 FDS 사전 검사 (결제 차단)
+        if (amount >= FDS_THRESHOLD) {
+            val fds = fdsClient.check(userId, amount)
+            if (!fds.approved) {
+                log.warn("[시나리오6] FDS 거부 userId=$userId amount=$amount reason=${fds.reason}")
+                throw IllegalStateException("FDS rejected: ${fds.reason}")
+            }
+        }
+
         val response = chargeService.chargePoints(userId, amount, idempotencyKey)
         if (response.status != ChargeStatus.COMPLETED) return response
 
@@ -66,6 +83,18 @@ class ChargeFacade(
         channels.forEach { channel ->
             notify(userId, title, content, channel, response.chargeId)
         }
+
+        // [시나리오6] 그로스팀: 최초 충전이면 환영 쿠폰 지급
+        if (rewardService.isFirstCharge(userId)) {
+            runCatching { rewardService.grantInitialCoupon(userId) }
+                .onFailure { ex -> log.warn("[시나리오6] 리워드 지급 실패 userId=$userId reason=${ex.message}") }
+        }
+
+        // [시나리오6] 데이터팀: 충전 이벤트를 데이터레이크에 적재
+        runCatching {
+            dataLakeClient.publish(ChargeEvent(response.chargeId, userId, amount, response.balance))
+        }.onFailure { ex -> log.warn("[시나리오6] 데이터레이크 적재 실패 chargeId=${response.chargeId} reason=${ex.message}") }
+
         return response
     }
 
@@ -136,5 +165,6 @@ class ChargeFacade(
     companion object {
         private val NIGHT_START: LocalTime = LocalTime.of(22, 0)
         private val NIGHT_END: LocalTime = LocalTime.of(8, 0)
+        private const val FDS_THRESHOLD: Long = 1_000_000L
     }
 }

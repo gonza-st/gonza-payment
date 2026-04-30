@@ -1,15 +1,22 @@
 package com.gonza.payment.facade
 
+import com.gonza.payment.datalake.ChargeEvent
+import com.gonza.payment.datalake.DataLakeClient
 import com.gonza.payment.domain.ChargeStatus
 import com.gonza.payment.domain.Notification
 import com.gonza.payment.domain.NotificationChannel
 import com.gonza.payment.domain.NotificationStatus
 import com.gonza.payment.domain.User
 import com.gonza.payment.dto.ChargeResponse
+import com.gonza.payment.fds.FdsClient
+import com.gonza.payment.fds.FdsResult
 import com.gonza.payment.repository.UserRepository
+import com.gonza.payment.reward.RewardResult
+import com.gonza.payment.reward.RewardService
 import com.gonza.payment.service.ChargeService
 import com.gonza.payment.service.NotificationService
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -42,6 +49,9 @@ class ChargeFacadeTest {
     @Mock lateinit var chargeService: ChargeService
     @Mock lateinit var notificationService: NotificationService
     @Mock lateinit var userRepository: UserRepository
+    @Mock lateinit var fdsClient: FdsClient
+    @Mock lateinit var rewardService: RewardService
+    @Mock lateinit var dataLakeClient: DataLakeClient
 
     private val userId = UUID.randomUUID()
     private val idempotencyKey = "facade-key-001"
@@ -54,6 +64,9 @@ class ChargeFacadeTest {
             chargeService,
             notificationService,
             userRepository,
+            fdsClient,
+            rewardService,
+            dataLakeClient,
             channelTimeoutMs = 0L,
             clock = Clock.fixed(instant, zone),
             backoff = { backoffSleeps += it }
@@ -93,6 +106,9 @@ class ChargeFacadeTest {
     fun setUp() {
         stubChargeCompleted()
         stubAllNotifySent()
+        whenever(fdsClient.check(any(), any())).thenReturn(FdsResult(approved = true))
+        whenever(rewardService.isFirstCharge(any())).thenReturn(false)
+        whenever(rewardService.grantInitialCoupon(any())).thenReturn(RewardResult(granted = true, couponCode = "C-1"))
         backoffSleeps.clear()
     }
 
@@ -241,6 +257,99 @@ class ChargeFacadeTest {
 
         verify(notificationService, never()).notify(any(), any(), any(), any())
         verify(userRepository, never()).findById(any())
+        verify(dataLakeClient, never()).publish(any())
+        verify(rewardService, never()).grantInitialCoupon(any())
+    }
+
+    // ── [시나리오6] 결제 서비스가 모든 컨슈머의 배포 병목이 된다 ────────────────────
+
+    @Test
+    fun `보안팀 - amount 가 임계값(1_000_000) 이상이면 FDS 사전 검사`() {
+        stubUser()
+        whenever(chargeService.chargePoints(userId, 1_000_000L, idempotencyKey)).thenReturn(
+            ChargeResponse(chargeId = UUID.randomUUID(), status = ChargeStatus.COMPLETED, balance = 1_000_000L)
+        )
+
+        facade().chargePoints(userId, 1_000_000L, idempotencyKey)
+
+        verify(fdsClient).check(userId, 1_000_000L)
+    }
+
+    @Test
+    fun `보안팀 - amount 가 임계값 미만이면 FDS 호출 안 함`() {
+        stubUser()
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(fdsClient, never()).check(any(), any())
+    }
+
+    @Test
+    fun `보안팀 - FDS 거부 시 IllegalStateException 발생, chargeService 호출 안 함`() {
+        whenever(fdsClient.check(any(), any())).thenReturn(FdsResult(approved = false, reason = "BLACKLIST"))
+
+        assertThatThrownBy {
+            facade().chargePoints(userId, 2_000_000L, idempotencyKey)
+        }.isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("BLACKLIST")
+
+        verify(chargeService, never()).chargePoints(any(), any(), any())
+        verify(dataLakeClient, never()).publish(any())
+    }
+
+    @Test
+    fun `그로스팀 - 최초 충전이면 환영 쿠폰 지급`() {
+        stubUser()
+        whenever(rewardService.isFirstCharge(userId)).thenReturn(true)
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(rewardService).grantInitialCoupon(userId)
+    }
+
+    @Test
+    fun `그로스팀 - 최초 충전 아니면 쿠폰 지급 안 함`() {
+        stubUser()
+        whenever(rewardService.isFirstCharge(userId)).thenReturn(false)
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(rewardService, never()).grantInitialCoupon(any())
+    }
+
+    @Test
+    fun `그로스팀 - 리워드 지급 예외가 터져도 ChargeResponse 정상 반환`() {
+        stubUser()
+        whenever(rewardService.isFirstCharge(userId)).thenReturn(true)
+        whenever(rewardService.grantInitialCoupon(userId)).thenThrow(RuntimeException("reward boom"))
+
+        val result = facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        assertThat(result.status).isEqualTo(ChargeStatus.COMPLETED)
+        verify(dataLakeClient).publish(any())
+    }
+
+    @Test
+    fun `데이터팀 - 충전 완료 시 ChargeEvent 가 데이터레이크에 적재된다`() {
+        stubUser()
+        val captor = argumentCaptor<ChargeEvent>()
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(dataLakeClient).publish(captor.capture())
+        assertThat(captor.firstValue.userId).isEqualTo(userId)
+        assertThat(captor.firstValue.amount).isEqualTo(5000L)
+        assertThat(captor.firstValue.balance).isEqualTo(5000L)
+    }
+
+    @Test
+    fun `데이터팀 - publish 예외가 터져도 ChargeResponse 정상 반환`() {
+        stubUser()
+        whenever(dataLakeClient.publish(any())).thenThrow(RuntimeException("kafka boom"))
+
+        val result = facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        assertThat(result.status).isEqualTo(ChargeStatus.COMPLETED)
     }
 
     companion object {
