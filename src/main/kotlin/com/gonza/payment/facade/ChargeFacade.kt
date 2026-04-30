@@ -2,6 +2,7 @@ package com.gonza.payment.facade
 
 import com.gonza.payment.domain.ChargeStatus
 import com.gonza.payment.domain.NotificationChannel
+import com.gonza.payment.domain.NotificationStatus
 import com.gonza.payment.domain.User
 import com.gonza.payment.dto.ChargeResponse
 import com.gonza.payment.exception.NotFoundException
@@ -24,7 +25,8 @@ class ChargeFacade(
     private val notificationService: NotificationService,
     private val userRepository: UserRepository,
     @Value("\${notification.channel.timeout-ms:0}") private val channelTimeoutMs: Long,
-    private val clock: Clock = Clock.systemDefaultZone()
+    private val clock: Clock = Clock.systemDefaultZone(),
+    private val backoff: (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) }
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -69,38 +71,67 @@ class ChargeFacade(
 
     private fun notify(userId: UUID, title: String, content: String, channel: NotificationChannel, chargeId: UUID) {
         val start = System.currentTimeMillis()
+        val policy = retryPolicyFor(channel)
+        var attempt = 0
+        var lastStatus: NotificationStatus? = null
 
-        if (channelTimeoutMs > 0) {
-            // 타임아웃 설정 시: ForkJoin 스레드로 오프로드 후 제한 시간 대기
-            // ※ Tomcat 스레드는 여전히 channelTimeoutMs 동안 블로킹됨 (band-aid fix)
-            val future = CompletableFuture.supplyAsync {
-                notificationService.notify(userId, title, content, channel)
-            }
-            runCatching {
-                future.get(channelTimeoutMs, TimeUnit.MILLISECONDS)
-            }.onFailure { ex ->
-                future.cancel(true)
-                val elapsed = System.currentTimeMillis() - start
-                val reason = if (ex is TimeoutException) "TIMEOUT(${elapsed}ms > ${channelTimeoutMs}ms)" else ex.message
-                log.warn("[시나리오2] $channel 실패 chargeId=$chargeId reason=$reason")
-            }
-        } else {
-            // 타임아웃 없음: runCatching은 예외만 잡고 지연은 그대로 전파됨
-            runCatching {
-                notificationService.notify(userId, title, content, channel)
-            }.onFailure { ex ->
-                log.warn("[시나리오2] $channel 실패 chargeId=$chargeId reason=${ex.message}")
+        while (attempt < policy.maxAttempts) {
+            attempt++
+            lastStatus = invokeOnce(userId, title, content, channel, chargeId)
+            if (lastStatus == NotificationStatus.SENT) break
+
+            if (attempt < policy.maxAttempts) {
+                val sleepMs = policy.backoffMs(attempt)
+                log.warn("[시나리오5] $channel 재시도 attempt=$attempt sleepMs=$sleepMs chargeId=$chargeId")
+                backoff(sleepMs)
             }
         }
 
         val elapsed = System.currentTimeMillis() - start
-        log.info("[시나리오2] $channel elapsed=${elapsed}ms chargeId=$chargeId")
+        log.info("[시나리오5] $channel attempts=$attempt status=$lastStatus elapsed=${elapsed}ms chargeId=$chargeId")
+    }
+
+    private fun invokeOnce(userId: UUID, title: String, content: String, channel: NotificationChannel, chargeId: UUID): NotificationStatus? {
+        if (channelTimeoutMs > 0) {
+            // 시나리오2 band-aid: ForkJoin 스레드로 오프로드 후 제한 시간 대기
+            val future = CompletableFuture.supplyAsync {
+                notificationService.notify(userId, title, content, channel)
+            }
+            return runCatching {
+                future.get(channelTimeoutMs, TimeUnit.MILLISECONDS)
+            }.onFailure { ex ->
+                future.cancel(true)
+                val reason = if (ex is TimeoutException) "TIMEOUT(${channelTimeoutMs}ms)" else ex.message
+                log.warn("[시나리오2] $channel 실패 chargeId=$chargeId reason=$reason")
+            }.getOrNull()?.status
+        }
+        return runCatching {
+            notificationService.notify(userId, title, content, channel)
+        }.onFailure { ex ->
+            log.warn("[시나리오2] $channel 실패 chargeId=$chargeId reason=${ex.message}")
+        }.getOrNull()?.status
+    }
+
+    // [시나리오5] 채널마다 다른 SLA/재시도 정책이 한 곳에 뭉친다
+    //   - SMS: 즉시 재시도 3회, 선형 백오프 100/200/300ms (일시 실패 흔함)
+    //   - EMAIL: 24시간 내 5회/지수 백오프 → 동기 팬아웃에선 2회/200·400ms로 타협
+    //   - 카카오: 템플릿 거부 가능성 → 동기 재시도 안 함 (별도 갱신 절차 필요)
+    //   - SLACK: 마케팅 베스트 에포트 → 실패 무시
+    //   - PUSH: 베스트 에포트 → 실패 무시
+    //   - MARKETING_HUB: 순서/중복 보장 → 별도 처리 필요, 동기 재시도 안 함
+    // 결과: 한 채널 정책이 바뀔 때마다 ChargeFacade 가 수정된다.
+    private fun retryPolicyFor(channel: NotificationChannel): RetryPolicy = when (channel) {
+        NotificationChannel.SMS -> RetryPolicy(maxAttempts = 3) { attempt -> 100L * attempt }
+        NotificationChannel.EMAIL -> RetryPolicy(maxAttempts = 2) { attempt -> 200L * (1L shl (attempt - 1)) }
+        else -> RetryPolicy(maxAttempts = 1) { 0L }
     }
 
     private fun User.isForeignNumber(): Boolean {
         val digits = phoneNumber.filter { it.isDigit() }
         return !digits.startsWith("010") && !digits.startsWith("8210")
     }
+
+    private data class RetryPolicy(val maxAttempts: Int, val backoffMs: (Int) -> Long)
 
     companion object {
         private val NIGHT_START: LocalTime = LocalTime.of(22, 0)
