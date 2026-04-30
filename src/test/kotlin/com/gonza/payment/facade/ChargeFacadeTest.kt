@@ -11,10 +11,14 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.junit.jupiter.MockitoSettings
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.atLeast
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -52,7 +56,7 @@ class ChargeFacadeTest {
     }
 
     private fun stubUser(
-        phoneNumber: String = "010-1234-5678",
+        phoneNumber: String = KOREAN_PHONE,
         vip: Boolean = false,
         marketingOptIn: Boolean = false
     ) {
@@ -71,86 +75,52 @@ class ChargeFacadeTest {
         stubChargeCompleted()
     }
 
-    @Test
-    fun `기본 사용자 - 주간 - SMS, EMAIL 발송`() {
-        stubUser()
+    // ── [시나리오4] 라우팅 조합 폭발: phone × night × vip × marketingOptIn = 16 케이스 ──
+    // ※ 이 한 메서드가 ChargeFacade 의 알림 라우팅 정책을 통째로 검증한다.
+    //   알림 정책 한 줄만 바뀌어도 16개 중 다수가 한꺼번에 빨개지며, 충전 로직과 무관하게
+    //   "충전 테스트가 깨졌다" 는 신호를 만든다.
+    @ParameterizedTest(name = "[{index}] phone={0} night={1} vip={2} marketingOptIn={3} → {4}")
+    @CsvSource(
+        // phone,    night, vip,   marketingOptIn, expectedChannels (콤마 구분)
+        "NORMAL,  false, false, false, 'SMS;EMAIL'",
+        "NORMAL,  true,  false, false, 'PUSH;EMAIL'",
+        "NORMAL,  false, true,  false, 'SMS;EMAIL;KAKAO_ALIMTALK'",
+        "NORMAL,  false, false, true,  'SMS;EMAIL;SLACK'",
+        "NORMAL,  true,  true,  false, 'PUSH;EMAIL;KAKAO_ALIMTALK'",
+        "NORMAL,  true,  false, true,  'PUSH;EMAIL;SLACK'",
+        "NORMAL,  false, true,  true,  'SMS;EMAIL;KAKAO_ALIMTALK;SLACK'",
+        "NORMAL,  true,  true,  true,  'PUSH;EMAIL;KAKAO_ALIMTALK;SLACK'",
+        "FOREIGN, false, false, false, 'EMAIL'",
+        "FOREIGN, true,  false, false, 'EMAIL'",
+        "FOREIGN, false, true,  false, 'EMAIL;KAKAO_ALIMTALK'",
+        "FOREIGN, false, false, true,  'EMAIL;SLACK'",
+        "FOREIGN, true,  true,  false, 'EMAIL;KAKAO_ALIMTALK'",
+        "FOREIGN, true,  false, true,  'EMAIL;SLACK'",
+        "FOREIGN, false, true,  true,  'EMAIL;KAKAO_ALIMTALK;SLACK'",
+        "FOREIGN, true,  true,  true,  'EMAIL;KAKAO_ALIMTALK;SLACK'"
+    )
+    fun `충전 완료 시 사용자 상태 X 시간대 조합에 맞는 채널로만 발송한다`(
+        phoneType: String,
+        night: Boolean,
+        vip: Boolean,
+        marketingOptIn: Boolean,
+        expectedChannelsCsv: String
+    ) {
+        val phoneNumber = if (phoneType == "FOREIGN") FOREIGN_PHONE else KOREAN_PHONE
+        val time = if (night) NIGHT_TIME else DAY_TIME
+        stubUser(phoneNumber = phoneNumber, vip = vip, marketingOptIn = marketingOptIn)
 
-        facade(time = LocalTime.of(15, 0)).chargePoints(userId, 5000L, idempotencyKey)
+        facade(time = time).chargePoints(userId, 5000L, idempotencyKey)
 
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.SMS))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.PUSH))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.KAKAO_ALIMTALK))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.SLACK))
+        val expected = expectedChannelsCsv.split(";").map { NotificationChannel.valueOf(it.trim()) }.toSet()
+        val captor = argumentCaptor<NotificationChannel>()
+        verify(notificationService, atLeast(1)).notify(any(), any(), any(), captor.capture())
+        assertThat(captor.allValues.toSet()).isEqualTo(expected)
     }
 
-    @Test
-    fun `야간 - SMS 대신 PUSH 로 대체`() {
-        stubUser()
-
-        facade(time = LocalTime.of(23, 30)).chargePoints(userId, 5000L, idempotencyKey)
-
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.PUSH))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.SMS))
-    }
-
-    @Test
-    fun `VIP 회원 - 알림톡 추가 발송`() {
-        stubUser(vip = true)
-
-        facade().chargePoints(userId, 5000L, idempotencyKey)
-
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.SMS))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.KAKAO_ALIMTALK))
-    }
-
-    @Test
-    fun `마케팅 수신 동의자 - SLACK 추가 발송`() {
-        stubUser(marketingOptIn = true)
-
-        facade().chargePoints(userId, 5000L, idempotencyKey)
-
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.SLACK))
-    }
-
-    @Test
-    fun `외국 번호 사용자 - SMS, PUSH 제외 EMAIL 만`() {
-        stubUser(phoneNumber = "+1-415-555-1234")
-
-        facade().chargePoints(userId, 5000L, idempotencyKey)
-
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.SMS))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.PUSH))
-    }
-
-    @Test
-    fun `외국 번호 + VIP + 마케팅 동의 - EMAIL, KAKAO, SLACK`() {
-        stubUser(phoneNumber = "+1-415-555-1234", vip = true, marketingOptIn = true)
-
-        facade().chargePoints(userId, 5000L, idempotencyKey)
-
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.KAKAO_ALIMTALK))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.SLACK))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.SMS))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.PUSH))
-    }
-
-    @Test
-    fun `야간 + VIP + 마케팅 동의 - PUSH, EMAIL, KAKAO, SLACK`() {
-        stubUser(vip = true, marketingOptIn = true)
-
-        facade(time = LocalTime.of(2, 0)).chargePoints(userId, 5000L, idempotencyKey)
-
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.PUSH))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.EMAIL))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.KAKAO_ALIMTALK))
-        verify(notificationService).notify(eq(userId), any(), any(), eq(NotificationChannel.SLACK))
-        verify(notificationService, never()).notify(any(), any(), any(), eq(NotificationChannel.SMS))
-    }
+    // ── 충전 본연의 책임: 알림 정책과 무관하게 보장돼야 하는 동작 ──────────────────
+    // ※ 시나리오4의 증상: 아래 두 케이스(충전 본연)와 위 16 케이스(라우팅)가 한 클래스에
+    //   섞여 있다는 사실 자체가 두 관심사 분리가 안 됐다는 증거다.
 
     @Test
     fun `notify 예외가 터져도 다른 채널은 계속 호출되고 ChargeResponse 정상 반환`() {
@@ -176,4 +146,10 @@ class ChargeFacadeTest {
         verify(userRepository, never()).findById(any())
     }
 
+    companion object {
+        private const val KOREAN_PHONE = "010-1234-5678"
+        private const val FOREIGN_PHONE = "+1-415-555-1234"
+        private val DAY_TIME: LocalTime = LocalTime.of(15, 0)
+        private val NIGHT_TIME: LocalTime = LocalTime.of(2, 0)
+    }
 }
