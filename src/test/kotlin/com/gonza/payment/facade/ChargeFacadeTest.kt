@@ -1,7 +1,9 @@
 package com.gonza.payment.facade
 
 import com.gonza.payment.domain.ChargeStatus
+import com.gonza.payment.domain.Notification
 import com.gonza.payment.domain.NotificationChannel
+import com.gonza.payment.domain.NotificationStatus
 import com.gonza.payment.domain.User
 import com.gonza.payment.dto.ChargeResponse
 import com.gonza.payment.repository.UserRepository
@@ -21,6 +23,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.atLeast
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.mockito.quality.Strictness
@@ -43,6 +46,7 @@ class ChargeFacadeTest {
     private val userId = UUID.randomUUID()
     private val idempotencyKey = "facade-key-001"
     private val zone: ZoneId = ZoneId.of("Asia/Seoul")
+    private val backoffSleeps = mutableListOf<Long>()
 
     private fun facade(time: LocalTime = LocalTime.of(15, 0)): ChargeFacade {
         val instant = ZonedDateTime.of(LocalDate.of(2026, 5, 1), time, zone).toInstant()
@@ -51,7 +55,8 @@ class ChargeFacadeTest {
             notificationService,
             userRepository,
             channelTimeoutMs = 0L,
-            clock = Clock.fixed(instant, zone)
+            clock = Clock.fixed(instant, zone),
+            backoff = { backoffSleeps += it }
         )
     }
 
@@ -70,18 +75,30 @@ class ChargeFacadeTest {
         )
     }
 
+    private fun stubAllNotifySent() {
+        whenever(notificationService.notify(any(), any(), any(), any())).thenAnswer { inv ->
+            notificationOf(inv.arguments[3] as NotificationChannel, NotificationStatus.SENT)
+        }
+    }
+
+    private fun notificationOf(channel: NotificationChannel, status: NotificationStatus) = Notification(
+        title = "t",
+        content = "c",
+        channel = channel,
+        toUserId = userId,
+        status = status
+    )
+
     @BeforeEach
     fun setUp() {
         stubChargeCompleted()
+        stubAllNotifySent()
+        backoffSleeps.clear()
     }
 
     // ── [시나리오4] 라우팅 조합 폭발: phone × night × vip × marketingOptIn = 16 케이스 ──
-    // ※ 이 한 메서드가 ChargeFacade 의 알림 라우팅 정책을 통째로 검증한다.
-    //   알림 정책 한 줄만 바뀌어도 16개 중 다수가 한꺼번에 빨개지며, 충전 로직과 무관하게
-    //   "충전 테스트가 깨졌다" 는 신호를 만든다.
     @ParameterizedTest(name = "[{index}] phone={0} night={1} vip={2} marketingOptIn={3} → {4}")
     @CsvSource(
-        // phone,    night, vip,   marketingOptIn, expectedChannels (콤마 구분)
         "NORMAL,  false, false, false, 'SMS;EMAIL'",
         "NORMAL,  true,  false, false, 'PUSH;EMAIL'",
         "NORMAL,  false, true,  false, 'SMS;EMAIL;KAKAO_ALIMTALK'",
@@ -118,9 +135,89 @@ class ChargeFacadeTest {
         assertThat(captor.allValues.toSet()).isEqualTo(expected)
     }
 
+    // ── [시나리오5] 채널마다 다른 SLA/재시도 정책이 한 곳에 뭉친다 ─────────────────
+
+    @Test
+    fun `SMS 첫 시도 FAILED 면 재시도 후 SENT 면 그 자리에서 종료`() {
+        stubUser()
+        whenever(notificationService.notify(any(), any(), any(), eq(NotificationChannel.SMS)))
+            .thenReturn(notificationOf(NotificationChannel.SMS, NotificationStatus.FAILED))
+            .thenReturn(notificationOf(NotificationChannel.SMS, NotificationStatus.SENT))
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(notificationService, times(2)).notify(any(), any(), any(), eq(NotificationChannel.SMS))
+        assertThat(backoffSleeps).containsExactly(100L)
+    }
+
+    @Test
+    fun `SMS 3회 모두 FAILED 면 SMS 호출 3번에 백오프 100, 200ms 후 포기`() {
+        stubUser()
+        whenever(notificationService.notify(any(), any(), any(), eq(NotificationChannel.SMS)))
+            .thenReturn(notificationOf(NotificationChannel.SMS, NotificationStatus.FAILED))
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(notificationService, times(3)).notify(any(), any(), any(), eq(NotificationChannel.SMS))
+        assertThat(backoffSleeps).containsExactly(100L, 200L)
+    }
+
+    @Test
+    fun `EMAIL 정책 - 2회 시도, 지수 백오프 200ms`() {
+        stubUser()
+        whenever(notificationService.notify(any(), any(), any(), eq(NotificationChannel.EMAIL)))
+            .thenReturn(notificationOf(NotificationChannel.EMAIL, NotificationStatus.FAILED))
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(notificationService, times(2)).notify(any(), any(), any(), eq(NotificationChannel.EMAIL))
+        assertThat(backoffSleeps).contains(200L)
+    }
+
+    @Test
+    fun `KAKAO_ALIMTALK FAILED 여도 재시도 안 함 (템플릿 거부 가능성)`() {
+        stubUser(vip = true)
+        whenever(notificationService.notify(any(), any(), any(), eq(NotificationChannel.KAKAO_ALIMTALK)))
+            .thenReturn(notificationOf(NotificationChannel.KAKAO_ALIMTALK, NotificationStatus.FAILED))
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(notificationService, times(1)).notify(any(), any(), any(), eq(NotificationChannel.KAKAO_ALIMTALK))
+    }
+
+    @Test
+    fun `SLACK FAILED 여도 재시도 안 함 (마케팅 베스트 에포트)`() {
+        stubUser(marketingOptIn = true)
+        whenever(notificationService.notify(any(), any(), any(), eq(NotificationChannel.SLACK)))
+            .thenReturn(notificationOf(NotificationChannel.SLACK, NotificationStatus.FAILED))
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(notificationService, times(1)).notify(any(), any(), any(), eq(NotificationChannel.SLACK))
+    }
+
+    @Test
+    fun `PUSH FAILED 여도 재시도 안 함 (베스트 에포트)`() {
+        stubUser()
+        whenever(notificationService.notify(any(), any(), any(), eq(NotificationChannel.PUSH)))
+            .thenReturn(notificationOf(NotificationChannel.PUSH, NotificationStatus.FAILED))
+
+        facade(time = NIGHT_TIME).chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(notificationService, times(1)).notify(any(), any(), any(), eq(NotificationChannel.PUSH))
+    }
+
+    @Test
+    fun `SMS 첫 시도 SENT 면 재시도 안 함, 백오프 호출 없음`() {
+        stubUser()
+
+        facade().chargePoints(userId, 5000L, idempotencyKey)
+
+        verify(notificationService, times(1)).notify(any(), any(), any(), eq(NotificationChannel.SMS))
+        assertThat(backoffSleeps).isEmpty()
+    }
+
     // ── 충전 본연의 책임: 알림 정책과 무관하게 보장돼야 하는 동작 ──────────────────
-    // ※ 시나리오4의 증상: 아래 두 케이스(충전 본연)와 위 16 케이스(라우팅)가 한 클래스에
-    //   섞여 있다는 사실 자체가 두 관심사 분리가 안 됐다는 증거다.
 
     @Test
     fun `notify 예외가 터져도 다른 채널은 계속 호출되고 ChargeResponse 정상 반환`() {
