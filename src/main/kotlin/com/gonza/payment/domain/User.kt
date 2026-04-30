@@ -23,5 +23,11 @@ class User(
     val email: String,
 
     @Column(nullable = false)
+    val vip: Boolean = false,
+
+    @Column(name = "marketing_opt_in", nullable = false)
+    val marketingOptIn: Boolean = false,
+
+    @Column(nullable = false)
     val createdAt: Instant = Instant.now()
 )
