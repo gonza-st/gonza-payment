@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>부하 테스트 결과</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;padding:2rem}
+    h1{font-size:1.8rem;margin-bottom:.3rem}
+    .subtitle{color:#94a3b8;margin-bottom:2rem;font-size:.9rem}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:2rem}
+    .card{background:#1e293b;border-radius:12px;padding:1.5rem;border:1px solid #334155}
+    .card-label{font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem}
+    .card-value{font-size:2rem;font-weight:700}
+    .card-sub{font-size:.8rem;color:#64748b;margin-top:.25rem}
+    .green{color:#4ade80}.blue{color:#60a5fa}.purple{color:#a78bfa}.yellow{color:#facc15}
+    .section{margin-bottom:2rem}
+    .section h2{font-size:1.2rem;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid #334155}
+    table{width:100%;border-collapse:collapse}
+    th,td{text-align:left;padding:.75rem 1rem}
+    th{color:#94a3b8;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #334155}
+    td{border-bottom:1px solid #1e293b;font-variant-numeric:tabular-nums}
+    tr:hover td{background:#1e293b}
+    .badge{display:inline-block;padding:.2rem .6rem;border-radius:9999px;font-size:.75rem;font-weight:600}
+    .badge-pass{background:#065f46;color:#6ee7b7}
+    .badge-fail{background:#7f1d1d;color:#fca5a5}
+    .checks-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
+    .check-card{background:#1e293b;border-radius:12px;padding:1.2rem 1.5rem;border:1px solid #334155;display:flex;justify-content:space-between;align-items:center}
+    .check-name{font-weight:500}
+    .check-count{font-size:.85rem;color:#94a3b8}
+    .bar-bg{background:#334155;border-radius:9999px;height:8px;margin-top:1rem;overflow:hidden}
+    .bar-fill{height:100%;border-radius:9999px;background:linear-gradient(90deg,#4ade80,#22d3ee)}
+    .info-table td{border:none;padding:.3rem 1rem .3rem 0;font-size:.85rem}
+    .info-label{color:#94a3b8}
+  </style>
+</head>
+<body>
+
+  <a href="/" style="display:inline-block;margin-bottom:1.5rem;color:#94a3b8;text-decoration:none;font-size:.85rem;transition:color .2s" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#94a3b8'">&larr; 대시보드</a>
+  <h1>부하 테스트 결과</h1>
+  <p class="subtitle">gonza-payment · 포인트 충전 / 기프티콘 구매 · 2026-05-07 · 총 4분 30초</p>
+
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:2rem">
+    <div class="card">
+      <div class="card-label" style="margin-bottom:.8rem;font-size:.85rem">테스트 조건</div>
+      <table class="info-table">
+        <tr><td class="info-label">시나리오</td><td>충전 → 구매 → 사용 (VU당 순차, VU간 병렬)</td></tr>
+        <tr><td class="info-label">사전 데이터</td><td>사용자 30,000명 / 상품 3개</td></tr>
+        <tr><td class="info-label">부하 프로필</td><td>Ramp-up 0→50 (30s) → 유지 50 (2m) → 스파이크 50→100 (30s) → 고부하 100 (1m) → Ramp-down (30s)</td></tr>
+        <tr><td class="info-label">도구</td><td>k6 (grafana/k6 Docker)</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-label" style="margin-bottom:.8rem;font-size:.85rem">서버 스펙 (Docker)</div>
+      <table class="info-table">
+        <tr><td class="info-label">API 서버</td><td>Spring Boot 3.3 / JDK 17 (eclipse-temurin:17-jre)</td></tr>
+        <tr><td class="info-label">데이터베이스</td><td>PostgreSQL 16</td></tr>
+        <tr><td class="info-label">PG 모의 지연</td><td>0ms (비활성)</td></tr>
+        <tr><td class="info-label">PG 모의 실패율</td><td>0% (비활성)</td></tr>
+        <tr><td class="info-label">리소스 제한</td><td>제한 없음 (Docker 기본값)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-label">총 요청 수</div>
+      <div class="card-value blue">46,656</div>
+      <div class="card-sub">초당 173건</div>
+    </div>
+    <div class="card">
+      <div class="card-label">반복 횟수</div>
+      <div class="card-value purple">15,552</div>
+      <div class="card-sub">초당 57.6회</div>
+    </div>
+    <div class="card">
+      <div class="card-label">HTTP 실패율</div>
+      <div class="card-value green">0.00%</div>
+      <div class="card-sub">실패 0건 / 전체 46,656건</div>
+    </div>
+    <div class="card">
+      <div class="card-label">최대 동시 사용자</div>
+      <div class="card-value yellow">50</div>
+      <div class="card-sub">최소 0 · 최대 50</div>
+    </div>
+    <div class="card">
+      <div class="card-label">송신 데이터</div>
+      <div class="card-value" style="color:#f472b6">11.0 MB</div>
+      <div class="card-sub">41.6 KB/s</div>
+    </div>
+    <div class="card">
+      <div class="card-label">수신 데이터</div>
+      <div class="card-value" style="color:#38bdf8">10.4 MB</div>
+      <div class="card-sub">39.4 KB/s</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>성공 기준</h2>
+    <table>
+      <thead><tr><th>지표</th><th>기준</th><th>실측값</th><th style="text-align:right">결과</th></tr></thead>
+      <tbody>
+        <tr><td>HTTP 실패율</td><td>rate<0.10</td><td>0.00%</td><td style="text-align:right"><span class="badge badge-pass">통과</span></td></tr>
+        <tr><td>응답시간 p(95)</td><td>p(95)<2000</td><td>32.83ms</td><td style="text-align:right"><span class="badge badge-pass">통과</span></td></tr>
+        <tr><td>응답시간 p(99)</td><td>p(99)<5000</td><td>0.00ms</td><td style="text-align:right"><span class="badge badge-pass">통과</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>검증 항목</h2>
+    <div class="checks-grid">
+      <div class="check-card"><div><div class="check-name">충전 성공 (200)</div><div class="check-count">15,552 / 15,552</div></div><span class="badge badge-pass">100%</span></div>
+      <div class="check-card"><div><div class="check-name">구매 성공 (201)</div><div class="check-count">15,552 / 15,552</div></div><span class="badge badge-pass">100%</span></div>
+      <div class="check-card"><div><div class="check-name">사용 성공 (200)</div><div class="check-count">15,552 / 15,552</div></div><span class="badge badge-pass">100%</span></div>
+    </div>
+    <div class="bar-bg" style="margin-top:1rem"><div class="bar-fill" style="width:100.00%"></div></div>
+    <div style="text-align:right;font-size:.8rem;color:#94a3b8;margin-top:.3rem">전체 46,656건 중 46,656건 통과</div>
+  </div>
+
+  <div class="section">
+    <h2>응답 시간 상세 (ms)</h2>
+    <table>
+      <thead><tr><th>지표</th><th>평균</th><th>최소</th><th>중앙값</th><th>p(90)</th><th>p(95)</th><th>최대</th></tr></thead>
+      <tbody>
+        <tr><td>총 응답시간</td><td>9.37</td><td>0.30</td><td>4.42</td><td>19.22</td><td>32.83</td><td>2312.81</td></tr>
+        <tr><td>서버 처리시간</td><td>9.21</td><td>0.30</td><td>4.33</td><td>18.93</td><td>32.28</td><td>2307.23</td></tr>
+        <tr><td>요청 전송</td><td>0.05</td><td>0.00</td><td>0.01</td><td>0.05</td><td>0.09</td><td>68.27</td></tr>
+        <tr><td>응답 수신</td><td>0.11</td><td>0.00</td><td>0.04</td><td>0.15</td><td>0.25</td><td>61.88</td></tr>
+        <tr><td>연결 대기</td><td>0.03</td><td>0.00</td><td>0.00</td><td>0.01</td><td>0.03</td><td>69.58</td></tr>
+        <tr><td>TCP 연결</td><td>0.01</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>22.27</td></tr>
+        <tr><td>반복 소요시간</td><td>531.22</td><td>503.26</td><td>516.58</td><td>565.92</td><td>600.31</td><td>3181.95</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>

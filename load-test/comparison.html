@@ -10,6 +10,13 @@
     h1{font-size:1.8rem;margin-bottom:.3rem}
     .subtitle{color:#94a3b8;margin-bottom:2rem;font-size:.9rem}
 
+    .selector-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:2rem;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:1.2rem 1.5rem}
+    .selector-cell label{display:block;font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+    .selector-cell select{width:100%;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:.55rem .75rem;font-size:.9rem;font-family:inherit}
+    .selector-cell select:focus{outline:none;border-color:#60a5fa}
+    .selector-cell.before label::before{content:"●";color:#f87171;margin-right:.4rem}
+    .selector-cell.after label::before{content:"●";color:#4ade80;margin-right:.4rem}
+
     .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}
     .meta-card{background:#1e293b;border-radius:12px;padding:1.5rem;border:1px solid #334155}
     .meta-card.before{border-left:4px solid #f87171}
@@ -53,25 +60,37 @@
     .footer-links{margin-top:2rem;display:flex;gap:1rem;flex-wrap:wrap}
     .footer-links a{display:inline-block;padding:.5rem 1rem;background:#1e293b;border:1px solid #334155;border-radius:8px;color:#60a5fa;text-decoration:none;font-size:.85rem}
     .footer-links a:hover{border-color:#60a5fa}
+    .footer-links a.disabled{opacity:.4;pointer-events:none}
   </style>
 </head>
 <body>
 
   <a href="/" style="display:inline-block;margin-bottom:1.5rem;color:#94a3b8;text-decoration:none;font-size:.85rem">&larr; 대시보드</a>
   <h1>Before vs After EDA 비교</h1>
-  <p class="subtitle">알림 발송을 동기 직렬 fan-out → ApplicationEvent 비동기로 분리했을 때의 부하 테스트 영향 측정</p>
+  <p class="subtitle">알림 발송을 동기 직렬 fan-out → ApplicationEvent 비동기로 분리했을 때의 부하 테스트 영향 측정. 박제된 예시 결과와 직접 측정한 결과를 자유롭게 비교할 수 있습니다.</p>
+
+  <div class="selector-grid">
+    <div class="selector-cell before">
+      <label for="sel-before">Before (좌)</label>
+      <select id="sel-before"></select>
+    </div>
+    <div class="selector-cell after">
+      <label for="sel-after">After (우)</label>
+      <select id="sel-after"></select>
+    </div>
+  </div>
 
   <div id="status" class="verdict-banner verdict-pending">측정 결과 로드 중...</div>
 
   <div class="meta-grid">
     <div class="meta-card before">
-      <div class="meta-label">Before — 동기 직렬 fan-out</div>
-      <div class="meta-title">충전 응답에 알림 latency가 그대로 누적</div>
+      <div class="meta-label" id="meta-before-label">Before</div>
+      <div class="meta-title" id="meta-before-title">—</div>
       <table class="meta-table" id="meta-before"><tr><td class="key">측정일</td><td>—</td></tr></table>
     </div>
     <div class="meta-card after">
-      <div class="meta-label">After — ApplicationEvent 기반 EDA</div>
-      <div class="meta-title">알림 발송이 충전 트랜잭션 밖에서 비동기 처리</div>
+      <div class="meta-label" id="meta-after-label">After</div>
+      <div class="meta-title" id="meta-after-title">—</div>
       <table class="meta-table" id="meta-after"><tr><td class="key">측정일</td><td>—</td></tr></table>
     </div>
   </div>
@@ -89,12 +108,28 @@
   </div>
 
   <div class="footer-links">
-    <a href="/comparison/before-eda/report.html">Before 원본 리포트</a>
-    <a href="/comparison/after-eda/report.html">After 원본 리포트</a>
+    <a id="link-before" href="#">Before 원본 리포트</a>
+    <a id="link-after" href="#">After 원본 리포트</a>
     <a href="/load/report.html">최신 단일 측정 리포트</a>
   </div>
 
 <script>
+const PRESETS = [
+  // 박제된 예시 — 항상 존재
+  { id: 'ex-before',  group: '예시', label: 'Before EDA — 동기 직렬 fan-out',     path: '/examples/comparison/before-eda',          title: '동기 직렬 fan-out (충전 응답에 알림 latency 누적)' },
+  { id: 'ex-small',   group: '예시', label: 'After EDA — 작은 풀 (reject 4.2%)',  path: '/examples/comparison/after-eda-small-pool', title: 'EDA + 명시적 작은 풀 32/200 → reject 함정' },
+  { id: 'ex-default', group: '예시', label: 'After EDA — 디폴트 큐 (reject 0%)',  path: '/examples/comparison/after-eda-default',   title: 'EDA + Spring Boot 기본 executor (queue Integer.MAX_VALUE)' },
+
+  // 사용자가 직접 측정한 결과 — 존재할 때만 셀렉터에 노출
+  { id: 'my-before',         group: '내 측정', label: '내 측정 — before-eda',              path: '/comparison/before-eda',              title: '직접 측정한 before-eda' },
+  { id: 'my-after',          group: '내 측정', label: '내 측정 — after-eda',               path: '/comparison/after-eda',               title: '직접 측정한 after-eda' },
+  { id: 'my-after-default',  group: '내 측정', label: '내 측정 — after-eda-default-queue', path: '/comparison/after-eda-default-queue', title: '직접 측정한 after-eda-default-queue' },
+];
+
+// 기본 비교: Before 동기 직렬 vs After 디폴트 큐
+const DEFAULT_BEFORE = 'ex-before';
+const DEFAULT_AFTER = 'ex-default';
+
 const fmt = (n, d = 2) => n === null || n === undefined ? '—' : Number(n).toFixed(d);
 const fmtMs = (n) => n === null || n === undefined ? '—' : `${fmt(n, 0)} ms`;
 const fmtPct = (n) => n === null || n === undefined ? '—' : `${fmt(n * 100, 2)}%`;
@@ -102,24 +137,27 @@ const comma = (n) => n === null || n === undefined ? '—' : String(Math.round(N
 
 async function loadSummary(path) {
   try {
-    const res = await fetch(path);
+    const res = await fetch(`${path}/summary.json`);
     if (!res.ok) return null;
     return await res.json();
   } catch (_) { return null; }
+}
+
+async function probeExists(path) {
+  try {
+    const res = await fetch(`${path}/summary.json`, { method: 'HEAD' });
+    return res.ok;
+  } catch (_) { return false; }
 }
 
 function getMetric(data, key, stat) {
   return data?.metrics?.[key]?.values?.[stat] ?? null;
 }
 
-// 직렬화/태그된 sub-metric 형태 — k6는 tag 메트릭을 'http_req_duration{name:충전}'로 저장
 function getTagMetric(data, base, tagName, stat) {
-  const direct = data?.metrics?.[`${base}{name:${tagName}}`]?.values?.[stat];
-  if (direct !== undefined) return direct;
-  return null;
+  return data?.metrics?.[`${base}{name:${tagName}}`]?.values?.[stat] ?? null;
 }
 
-// 작을수록 좋은 metric — Before > After 면 개선
 const METRICS = [
   { name: '처리량 (iterations/s)', desc: '높을수록 좋음 (초당 시나리오 완료 수)', key: 'iterations', stat: 'rate', higherIsBetter: true, fmt: (n) => fmt(n, 1) },
   { name: 'iteration_duration p(95)', desc: '한 시나리오(충전→구매→사용) 95퍼센타일', key: 'iteration_duration', stat: 'p(95)', higherIsBetter: false, fmt: fmtMs },
@@ -167,32 +205,31 @@ function renderMetricCard(spec, beforeVal, afterVal) {
         <span class="value">${spec.fmt(afterVal)}</span>
       </div>
       <div class="delta">
-        <span class="${d.cls === 'delta-good' ? 'delta-good' : d.cls === 'delta-bad' ? 'delta-bad' : 'delta-neutral'}">${arrow} ${spec.fmt(Math.abs(d.abs ?? 0))}${pctTxt}</span>
+        <span class="${d.cls}">${arrow} ${spec.fmt(Math.abs(d.abs ?? 0))}${pctTxt}</span>
         <span style="color:#64748b;font-size:.75rem">${d.improved ? '개선' : (d.improved === false ? '악화' : '판정 불가')}</span>
       </div>
     </div>
   `;
 }
 
-function renderMeta(elId, data, label) {
+function renderMeta(elId, titleId, labelId, data, preset) {
+  document.getElementById(labelId).textContent = preset.group;
+  document.getElementById(titleId).textContent = preset.title;
   const el = document.getElementById(elId);
   if (!data) {
-    el.innerHTML = `<tr><td class="key">상태</td><td style="color:#f87171">측정 결과 없음 — load-test/results/comparison/${label}/summary.json 확인</td></tr>`;
+    el.innerHTML = `<tr><td class="key">상태</td><td style="color:#f87171">측정 결과 없음</td></tr>`;
     return;
   }
   const ts = data.state?.testRunStartedAt ?? '—';
   const dur = data.state?.testRunDurationMs ?? 0;
   const min = Math.floor(dur / 60000);
   const sec = Math.floor((dur % 60000) / 1000);
-  const vusMax = getMetric(data, 'vus_max', 'max');
-  const totalIter = getMetric(data, 'iterations', 'count');
-  const totalReq = getMetric(data, 'http_reqs', 'count');
   el.innerHTML = `
     <tr><td class="key">측정 시각</td><td>${ts.slice(0, 19).replace('T', ' ')}</td></tr>
     <tr><td class="key">실행 시간</td><td>${min}분 ${sec}초</td></tr>
-    <tr><td class="key">최대 VU</td><td>${comma(vusMax)}</td></tr>
-    <tr><td class="key">총 iterations</td><td>${comma(totalIter)}</td></tr>
-    <tr><td class="key">총 http 요청</td><td>${comma(totalReq)}</td></tr>
+    <tr><td class="key">최대 VU</td><td>${comma(getMetric(data, 'vus_max', 'max'))}</td></tr>
+    <tr><td class="key">총 iterations</td><td>${comma(getMetric(data, 'iterations', 'count'))}</td></tr>
+    <tr><td class="key">총 http 요청</td><td>${comma(getMetric(data, 'http_reqs', 'count'))}</td></tr>
   `;
 }
 
@@ -230,40 +267,56 @@ function renderRawTable(before, after) {
   tbody.innerHTML = rows.join('\n');
 }
 
-(async () => {
-  const [before, after] = await Promise.all([
-    loadSummary('/comparison/before-eda/summary.json'),
-    loadSummary('/comparison/after-eda/summary.json'),
-  ]);
-
-  renderMeta('meta-before', before, 'before-eda');
-  renderMeta('meta-after', after, 'after-eda');
-
+function setVerdict(beforeData, afterData, beforePreset, afterPreset) {
   const status = document.getElementById('status');
-  if (!before && !after) {
+  if (!beforeData || !afterData) {
     status.className = 'verdict-banner verdict-pending';
-    status.textContent = '아직 두 측정 결과가 모두 없습니다. ./run-test.sh load 후 결과를 comparison/{before-eda|after-eda}/ 로 백업하세요.';
-  } else if (!before) {
-    status.className = 'verdict-banner verdict-warn';
-    status.textContent = 'After 측정만 존재 — Before(동기 직렬) 측정 결과가 필요합니다.';
-  } else if (!after) {
-    status.className = 'verdict-banner verdict-warn';
-    status.textContent = 'Before 측정만 존재 — After(EDA) 측정 결과가 필요합니다.';
+    status.textContent = !beforeData && !afterData
+      ? '두 측정 결과 모두 없습니다.'
+      : (!beforeData ? `Before(${beforePreset.label}) 결과가 없습니다.` : `After(${afterPreset.label}) 결과가 없습니다.`);
+    return;
+  }
+  const beforeP95 = getMetric(beforeData, 'http_req_duration', 'p(95)');
+  const afterP95 = getMetric(afterData, 'http_req_duration', 'p(95)');
+  const beforeFail = getMetric(beforeData, 'http_req_failed', 'rate') ?? 0;
+  const afterFail = getMetric(afterData, 'http_req_failed', 'rate') ?? 0;
+  const improvedPct = beforeP95 ? ((beforeP95 - afterP95) / beforeP95) * 100 : 0;
+  const failChange = afterFail - beforeFail;
+
+  let cls = 'verdict-warn';
+  let parts = [];
+  if (improvedPct >= 20) {
+    cls = 'verdict-pass';
+    parts.push(`http p95 ${fmt(improvedPct, 1)}% 개선 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)})`);
+  } else if (improvedPct > 0) {
+    parts.push(`http p95 변화 미미 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)}, ${fmt(improvedPct, 1)}%)`);
   } else {
-    const beforeP95 = getMetric(before, 'http_req_duration', 'p(95)');
-    const afterP95 = getMetric(after, 'http_req_duration', 'p(95)');
-    const improvedPct = beforeP95 ? ((beforeP95 - afterP95) / beforeP95) * 100 : 0;
-    if (improvedPct >= 20) {
-      status.className = 'verdict-banner verdict-pass';
-      status.textContent = `EDA 적용으로 http p95 ${fmt(improvedPct, 1)}% 개선 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)})`;
-    } else if (improvedPct >= 0) {
-      status.className = 'verdict-banner verdict-warn';
-      status.textContent = `EDA 적용 후 http p95 변화 미미 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)}, ${fmt(improvedPct, 1)}%)`;
+    cls = 'verdict-fail';
+    parts.push(`http p95 악화 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)})`);
+  }
+  if (Math.abs(failChange) >= 0.005) {
+    if (failChange > 0) {
+      cls = 'verdict-fail';
+      parts.push(`실패율 +${fmt(failChange * 100, 2)}pp`);
     } else {
-      status.className = 'verdict-banner verdict-fail';
-      status.textContent = `EDA 적용 후 http p95 악화 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)})`;
+      parts.push(`실패율 ${fmt(failChange * 100, 2)}pp`);
     }
   }
+  status.className = `verdict-banner ${cls}`;
+  status.textContent = parts.join(' · ');
+}
+
+async function rerender() {
+  const beforePreset = PRESETS.find(p => p.id === document.getElementById('sel-before').value);
+  const afterPreset = PRESETS.find(p => p.id === document.getElementById('sel-after').value);
+  const [before, after] = await Promise.all([loadSummary(beforePreset.path), loadSummary(afterPreset.path)]);
+
+  renderMeta('meta-before', 'meta-before-title', 'meta-before-label', before, beforePreset);
+  renderMeta('meta-after', 'meta-after-title', 'meta-after-label', after, afterPreset);
+  setVerdict(before, after, beforePreset, afterPreset);
+
+  document.getElementById('link-before').href = `${beforePreset.path}/report.html`;
+  document.getElementById('link-after').href = `${afterPreset.path}/report.html`;
 
   const grid = document.getElementById('compare-grid');
   const cards = [];
@@ -280,6 +333,39 @@ function renderRawTable(before, after) {
   grid.innerHTML = cards.join('\n');
 
   renderRawTable(before, after);
+}
+
+(async () => {
+  // 셀렉터 채우기 — 존재하는 preset 만 노출 (그룹별 옵션그룹)
+  const exist = await Promise.all(PRESETS.map(p => probeExists(p.path)));
+  const available = PRESETS.filter((_, i) => exist[i]);
+
+  function buildOptions(selected) {
+    const groups = {};
+    for (const p of available) {
+      (groups[p.group] ||= []).push(p);
+    }
+    let html = '';
+    for (const g of Object.keys(groups)) {
+      html += `<optgroup label="${g}">`;
+      for (const p of groups[g]) {
+        html += `<option value="${p.id}" ${p.id === selected ? 'selected' : ''}>${p.label}</option>`;
+      }
+      html += '</optgroup>';
+    }
+    return html;
+  }
+
+  const initialBefore = available.find(p => p.id === DEFAULT_BEFORE)?.id ?? available[0]?.id;
+  const initialAfter  = available.find(p => p.id === DEFAULT_AFTER)?.id ?? available[available.length - 1]?.id;
+
+  document.getElementById('sel-before').innerHTML = buildOptions(initialBefore);
+  document.getElementById('sel-after').innerHTML  = buildOptions(initialAfter);
+
+  document.getElementById('sel-before').addEventListener('change', rerender);
+  document.getElementById('sel-after').addEventListener('change', rerender);
+
+  await rerender();
 })();
 </script>
 
