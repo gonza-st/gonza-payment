@@ -69,12 +69,17 @@ echo "=== 사용자 ${USER_COUNT}명 생성 (병렬 ${PARALLEL_JOBS}개) ==="
 TEMP_DIR=$(mktemp -d)
 
 create_user() {
+  local idx="$2"
+  # 010 으로 시작하는 한국 번호 (idx 를 뒷자리에 패딩)
+  local phone
+  phone=$(printf "010%08d" "$idx")
+  local email="user-${idx}@example.com"
   local response
   response=$(curl -sf -X POST "$1/users" \
     -H 'Content-Type: application/json' \
-    -d "{\"name\": \"user-$2\"}")
+    -d "{\"name\": \"user-${idx}\", \"phoneNumber\": \"${phone}\", \"email\": \"${email}\"}")
   if [ -n "$response" ]; then
-    echo "$response" | jq -r '.userId' > "$3/$2"
+    echo "$response" | jq -r '.userId' > "$3/${idx}"
   fi
 }
 export -f create_user

@@ -88,11 +88,14 @@ export default function () {
   const userId = userIds[__VU % userIds.length];
   const productId = productIds[Math.floor(Math.random() * productIds.length)];
 
-  // 1. 기프티콘 구매 (ISSUED 상태 생성)
+  // 1. 기프티콘 구매 (ISSUED 상태 생성, Idempotency-Key 헤더 필수)
   const purchaseRes = http.post(
     `${BASE_URL}/users/${userId}/gifticons`,
     JSON.stringify({ productId }),
-    { headers: HEADERS, tags: { name: "구매" } }
+    {
+      headers: { ...HEADERS, "Idempotency-Key": uuidv4() },
+      tags: { name: "구매" },
+    }
   );
 
   if (purchaseRes.status !== 201) {

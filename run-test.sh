@@ -82,6 +82,14 @@ do_clean() {
 run_load() {
   local vus="${1:-100}"
   export TARGET_VUS="$vus"
+  # 부하 테스트는 결제 처리 자체의 처리량/응답시간을 측정하는 게 목적이므로
+  # 알림 채널 mock 지연을 모두 0으로 두어 채널 latency 영향을 제거
+  export SMS_MOCK_DELAY_MS=0
+  export EMAIL_MOCK_DELAY_MS=0
+  export PUSH_MOCK_DELAY_MS=0
+  export SLACK_MOCK_DELAY_MS=0
+  export MARKETING_HUB_MOCK_DELAY_MS=0
+  export KAKAO_MOCK_DELAY_MS=0
 
   echo -e "${BLUE}=== 부하 테스트 (VU: ${vus}) ===${NC}"
   echo ""

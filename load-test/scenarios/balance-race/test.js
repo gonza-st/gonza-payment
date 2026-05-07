@@ -98,7 +98,10 @@ export function setup() {
           "POST",
           `${BASE_URL}/users/${uid}/gifticons`,
           JSON.stringify({ productId }),
-          { headers: HEADERS, tags: { name: "잔액소진_setup" } },
+          {
+            headers: { ...HEADERS, "Idempotency-Key": uuidv4() },
+            tags: { name: "잔액소진_setup" },
+          },
         ]);
       }
       const responses = http.batch(batch);
@@ -173,6 +176,7 @@ export default function (data) {
   const maxAffordable = Math.floor(beforeBalance / PRODUCT_PRICE);
 
   // 4. 동시 N건 구매 요청 (핵심)
+  //    각 요청은 서로 다른 Idempotency-Key — 멱등 분기를 거치지 않고 잔액 경합으로 직진
   const batch = [];
   for (let i = 0; i < CONCURRENT; i++) {
     batch.push([
@@ -180,7 +184,7 @@ export default function (data) {
       `${BASE_URL}/users/${userId}/gifticons`,
       JSON.stringify({ productId }),
       {
-        headers: HEADERS,
+        headers: { ...HEADERS, "Idempotency-Key": uuidv4() },
         tags: { name: `동시구매_${i + 1}` },
       },
     ]);
