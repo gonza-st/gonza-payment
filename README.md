@@ -301,7 +301,10 @@ VU 50 · 4m 30s · 채널 mock 지연 활성 (SMS 200 + EMAIL 300 + PUSH 150 + S
 - **작은 풀의 함정**: 명시적으로 박은 `queueCapacity=200` 큐가 부하 정점에 가득차 `RejectedExecutionException` → 충전 4.20% 실패. EDA 의도(응답 빠름 + 알림은 비동기)는 살렸지만 비동기 큐 자체가 새 SPOF 가 됐다.
 - **디폴트 큐로 해소**: Spring Boot 자동설정의 `queueCapacity=Integer.MAX_VALUE` 로 두면 reject 없이 정상화. 처리량은 거의 동일.
 
-박제된 측정 결과는 [`load-test/examples/comparison/`](load-test/examples/comparison/) 에 있다. 비교 페이지는 `docker compose up -d` 후 http://localhost:19000/comparison.html 에서 확인할 수 있고, 셀렉터로 박제 결과끼리 또는 직접 측정한 결과와 자유롭게 비교 가능하다.
+박제된 측정 결과는 [`load-test/examples/comparison/`](load-test/examples/comparison/) 에 있다. 비교 페이지는 두 곳에서 볼 수 있다.
+
+- **GitHub Pages (공개 URL)** — https://gonza-st.github.io/gonza-payment/comparison.html. 박제된 결과만 표시되며 클론 / 도커 없이 바로 본다. main 브랜치의 `load-test/` 변경 시 자동 배포 ([워크플로우](.github/workflows/pages.yml)).
+- **로컬 (도커)** — `docker compose up -d` 후 http://localhost:19000/comparison.html. 박제 결과 + 직접 측정한 결과를 셀렉터로 자유롭게 비교 가능.
 
 이 구조는 향후 도메인 이벤트 + 비동기 발송으로 분리할 계획 ([Roadmap](#roadmap) 참고).
 

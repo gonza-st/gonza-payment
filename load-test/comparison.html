@@ -65,7 +65,7 @@
 </head>
 <body>
 
-  <a href="/" style="display:inline-block;margin-bottom:1.5rem;color:#94a3b8;text-decoration:none;font-size:.85rem">&larr; 대시보드</a>
+  <a href="./" style="display:inline-block;margin-bottom:1.5rem;color:#94a3b8;text-decoration:none;font-size:.85rem">&larr; 대시보드</a>
   <h1>Before vs After EDA 비교</h1>
   <p class="subtitle">알림 발송을 동기 직렬 fan-out → ApplicationEvent 비동기로 분리했을 때의 부하 테스트 영향 측정. 박제된 예시 결과와 직접 측정한 결과를 자유롭게 비교할 수 있습니다.</p>
 
@@ -110,20 +110,20 @@
   <div class="footer-links">
     <a id="link-before" href="#">Before 원본 리포트</a>
     <a id="link-after" href="#">After 원본 리포트</a>
-    <a href="/load/report.html">최신 단일 측정 리포트</a>
+    <a href="load/report.html">최신 단일 측정 리포트</a>
   </div>
 
 <script>
 const PRESETS = [
   // 박제된 예시 — 항상 존재
-  { id: 'ex-before',  group: '예시', label: 'Before EDA — 동기 직렬 fan-out',     path: '/examples/comparison/before-eda',          title: '동기 직렬 fan-out (충전 응답에 알림 latency 누적)' },
-  { id: 'ex-small',   group: '예시', label: 'After EDA — 작은 풀 (reject 4.2%)',  path: '/examples/comparison/after-eda-small-pool', title: 'EDA + 명시적 작은 풀 32/200 → reject 함정' },
-  { id: 'ex-default', group: '예시', label: 'After EDA — 디폴트 큐 (reject 0%)',  path: '/examples/comparison/after-eda-default',   title: 'EDA + Spring Boot 기본 executor (queue Integer.MAX_VALUE)' },
+  { id: 'ex-before',  group: '예시', label: 'Before EDA — 동기 직렬 fan-out',     path: 'examples/comparison/before-eda',          title: '동기 직렬 fan-out (충전 응답에 알림 latency 누적)' },
+  { id: 'ex-small',   group: '예시', label: 'After EDA — 작은 풀 (reject 4.2%)',  path: 'examples/comparison/after-eda-small-pool', title: 'EDA + 명시적 작은 풀 32/200 → reject 함정' },
+  { id: 'ex-default', group: '예시', label: 'After EDA — 디폴트 큐 (reject 0%)',  path: 'examples/comparison/after-eda-default',   title: 'EDA + Spring Boot 기본 executor (queue Integer.MAX_VALUE)' },
 
   // 사용자가 직접 측정한 결과 — 존재할 때만 셀렉터에 노출
-  { id: 'my-before',         group: '내 측정', label: '내 측정 — before-eda',              path: '/comparison/before-eda',              title: '직접 측정한 before-eda' },
-  { id: 'my-after',          group: '내 측정', label: '내 측정 — after-eda',               path: '/comparison/after-eda',               title: '직접 측정한 after-eda' },
-  { id: 'my-after-default',  group: '내 측정', label: '내 측정 — after-eda-default-queue', path: '/comparison/after-eda-default-queue', title: '직접 측정한 after-eda-default-queue' },
+  { id: 'my-before',         group: '내 측정', label: '내 측정 — before-eda',              path: 'comparison/before-eda',              title: '직접 측정한 before-eda' },
+  { id: 'my-after',          group: '내 측정', label: '내 측정 — after-eda',               path: 'comparison/after-eda',               title: '직접 측정한 after-eda' },
+  { id: 'my-after-default',  group: '내 측정', label: '내 측정 — after-eda-default-queue', path: 'comparison/after-eda-default-queue', title: '직접 측정한 after-eda-default-queue' },
 ];
 
 // 기본 비교: Before 동기 직렬 vs After 디폴트 큐

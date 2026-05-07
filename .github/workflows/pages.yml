@@ -1,0 +1,42 @@
+name: Deploy comparison page to GitHub Pages
+
+# load-test/ 디렉토리(비교 페이지 + 박제 측정 결과)를 GitHub Pages 로 배포한다.
+# 배포된 URL 예: https://gonza-st.github.io/gonza-payment/comparison.html
+on:
+  push:
+    branches: [main]
+    paths:
+      - "load-test/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시 배포 방지
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload load-test as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: load-test
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
