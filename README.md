@@ -287,6 +287,25 @@ return ChargeResponse
 
 `load` 시나리오로 채널 수에 따른 응답 시간 변화를 부하 테스트로 측정한다. 자세한 시나리오 분석은 [`docs/scenario/fanout-explosion/README.md`](docs/scenario/fanout-explosion/README.md) 참고.
 
+#### EDA 적용 전후 부하 테스트 비교
+
+VU 50 · 4m 30s · 채널 mock 지연 활성 (SMS 200 + EMAIL 300 + PUSH 150 + SLACK 250 + MARKETING_HUB 100 ms).
+
+| 측정 | 처리량 (iter/s) | http p95 | iteration p95 | 실패율 |
+|---|---:|---:|---:|---:|
+| Before — 동기 직렬 fan-out | 30.7 | 490 ms | 1,100 ms | 0% |
+| After — EDA + 작은 풀 (32/200) | 58.4 | 19 ms | 567 ms | **4.20%** ⚠️ |
+| After — EDA + Spring Boot 디폴트 | 57.6 | 33 ms | 600 ms | 0% |
+
+- **동기 → EDA**: 충전 응답에 누적되던 알림 latency 가 비동기로 빠지면서 처리량 +90%, http p95 −96%.
+- **작은 풀의 함정**: 명시적으로 박은 `queueCapacity=200` 큐가 부하 정점에 가득차 `RejectedExecutionException` → 충전 4.20% 실패. EDA 의도(응답 빠름 + 알림은 비동기)는 살렸지만 비동기 큐 자체가 새 SPOF 가 됐다.
+- **디폴트 큐로 해소**: Spring Boot 자동설정의 `queueCapacity=Integer.MAX_VALUE` 로 두면 reject 없이 정상화. 처리량은 거의 동일.
+
+박제된 측정 결과는 [`load-test/examples/comparison/`](load-test/examples/comparison/) 에 있다. 비교 페이지는 두 곳에서 볼 수 있다.
+
+- **GitHub Pages (공개 URL)** — https://gonza-st.github.io/gonza-payment/comparison.html. 박제된 결과만 표시되며 클론 / 도커 없이 바로 본다. main 브랜치의 `load-test/` 변경 시 자동 배포 ([워크플로우](.github/workflows/pages.yml)).
+- **로컬 (도커)** — `docker compose up -d` 후 http://localhost:19000/comparison.html. 박제 결과 + 직접 측정한 결과를 셀렉터로 자유롭게 비교 가능.
+
 이 구조는 향후 도메인 이벤트 + 비동기 발송으로 분리할 계획 ([Roadmap](#roadmap) 참고).
 
 ## 프로젝트 구조
