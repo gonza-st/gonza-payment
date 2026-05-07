@@ -57,12 +57,18 @@ export default function () {
     "충전 성공 (200)": (r) => r.status === 200,
   });
 
-  // 3. 랜덤 상품으로 기프티콘 구매
+  // 3. 랜덤 상품으로 기프티콘 구매 (Idempotency-Key 헤더 필수)
   const productId = productIds[Math.floor(Math.random() * productIds.length)];
   const purchaseRes = http.post(
     `${BASE_URL}/users/${userId}/gifticons`,
     JSON.stringify({ productId: productId }),
-    { headers: HEADERS, tags: { name: "구매" } }
+    {
+      headers: {
+        ...HEADERS,
+        "Idempotency-Key": uuidv4(),
+      },
+      tags: { name: "구매" },
+    }
   );
   check(purchaseRes, {
     "구매 성공 (201)": (r) => r.status === 201,
