@@ -81,6 +81,11 @@ services:
       - ./load-test/examples:/usr/share/nginx/html/examples:ro
     ports:
       - "19000:80"
+    # nginx.conf 의 proxy_pass 가 'api' 호스트를 직접 참조하므로,
+    # api 컨테이너가 healthy 해진 후 시작되어야 DNS resolve 실패로 죽지 않는다.
+    depends_on:
+      api:
+        condition: service_healthy
 
   # ── 부하 테스트 ─────────────────────────────────────────────────────────
   k6:
