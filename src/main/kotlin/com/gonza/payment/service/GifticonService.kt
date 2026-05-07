@@ -164,22 +164,24 @@ class GifticonService(
     }
 
     fun consumeGifticon(userId: UUID, gifticonId: UUID): ConsumeGifticonResponse {
-        val gifticon = gifticonRepository.findById(gifticonId)
-            .orElseThrow { NotFoundException("Gifticon not found: $gifticonId") }
+        return txTemplate.execute {
+            val gifticon = gifticonRepository.findById(gifticonId)
+                .orElseThrow { NotFoundException("Gifticon not found: $gifticonId") }
 
-        if (gifticon.userId != userId) {
-            throw NotFoundException("Gifticon not found: $gifticonId")
-        }
+            if (gifticon.userId != userId) {
+                throw NotFoundException("Gifticon not found: $gifticonId")
+            }
 
-        val updatedRows = gifticonRepository.consumeById(gifticonId, Instant.now())
-        if (updatedRows == 0) {
-            throw AlreadyConsumedException()
-        }
+            val updatedRows = gifticonRepository.consumeById(gifticonId, Instant.now())
+            if (updatedRows == 0) {
+                throw AlreadyConsumedException()
+            }
 
-        return ConsumeGifticonResponse(
-            gifticonId = gifticonId,
-            status = GifticonStatus.CONSUMED
-        )
+            ConsumeGifticonResponse(
+                gifticonId = gifticonId,
+                status = GifticonStatus.CONSUMED
+            )
+        }!!
     }
 
     private fun generateCode(): String {
