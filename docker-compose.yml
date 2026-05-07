@@ -75,6 +75,8 @@ services:
     volumes:
       - ./load-test/results:/usr/share/nginx/html
       - ./load-test/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # 시드와 무관하게 항상 비교 페이지를 노출 (results 가 비어 있어도 / clean 이후에도)
+      - ./load-test/comparison.html:/usr/share/nginx/html/comparison.html:ro
     ports:
       - "19000:80"
 

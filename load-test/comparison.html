@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Before vs After EDA - 부하 테스트 비교</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;padding:2rem}
+    h1{font-size:1.8rem;margin-bottom:.3rem}
+    .subtitle{color:#94a3b8;margin-bottom:2rem;font-size:.9rem}
+
+    .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+    .meta-card{background:#1e293b;border-radius:12px;padding:1.5rem;border:1px solid #334155}
+    .meta-card.before{border-left:4px solid #f87171}
+    .meta-card.after{border-left:4px solid #4ade80}
+    .meta-label{font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem}
+    .meta-title{font-size:1.1rem;font-weight:700;margin-bottom:.8rem}
+    .meta-table td{border:none;padding:.25rem 1rem .25rem 0;font-size:.85rem}
+    .meta-table .key{color:#94a3b8}
+
+    .verdict-banner{padding:1.4rem;border-radius:12px;margin-bottom:2rem;text-align:center;font-size:1.1rem;font-weight:600}
+    .verdict-pass{background:#065f46;border:2px solid #4ade80}
+    .verdict-fail{background:#7f1d1d;border:2px solid #f87171}
+    .verdict-warn{background:#78350f;border:2px solid #facc15;color:#fde68a}
+    .verdict-pending{background:#1e293b;border:2px dashed #334155;color:#94a3b8}
+
+    .compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1.2rem;margin-bottom:2rem}
+    .metric-card{background:#1e293b;border-radius:12px;padding:1.4rem 1.5rem;border:1px solid #334155}
+    .metric-name{font-size:.95rem;font-weight:600;margin-bottom:.25rem}
+    .metric-desc{font-size:.75rem;color:#64748b;margin-bottom:1rem}
+    .metric-row{display:grid;grid-template-columns:60px 1fr 80px;align-items:center;gap:.6rem;margin-bottom:.5rem}
+    .metric-row .label{font-size:.78rem;font-weight:600}
+    .metric-row .label.before{color:#f87171}
+    .metric-row .label.after{color:#4ade80}
+    .metric-row .value{text-align:right;font-size:.85rem;font-variant-numeric:tabular-nums;color:#e2e8f0}
+    .bar-track{height:14px;background:#0f172a;border-radius:6px;overflow:hidden;position:relative}
+    .bar-fill{height:100%;border-radius:6px;transition:width .3s}
+    .bar-fill.before{background:#f87171}
+    .bar-fill.after{background:#4ade80}
+    .delta{margin-top:.6rem;padding-top:.6rem;border-top:1px solid #334155;font-size:.85rem;display:flex;justify-content:space-between;align-items:center}
+    .delta-good{color:#4ade80;font-weight:700}
+    .delta-bad{color:#f87171;font-weight:700}
+    .delta-neutral{color:#94a3b8}
+
+    .raw-section{margin-top:2rem}
+    .raw-section h2{font-size:1.1rem;margin-bottom:1rem;padding-bottom:.4rem;border-bottom:1px solid #334155}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
+    th,td{text-align:left;padding:.6rem 1rem}
+    th{color:#94a3b8;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #334155}
+    td{border-bottom:1px solid #1e293b;font-variant-numeric:tabular-nums}
+    td.num{text-align:right}
+    .footer-links{margin-top:2rem;display:flex;gap:1rem;flex-wrap:wrap}
+    .footer-links a{display:inline-block;padding:.5rem 1rem;background:#1e293b;border:1px solid #334155;border-radius:8px;color:#60a5fa;text-decoration:none;font-size:.85rem}
+    .footer-links a:hover{border-color:#60a5fa}
+  </style>
+</head>
+<body>
+
+  <a href="/" style="display:inline-block;margin-bottom:1.5rem;color:#94a3b8;text-decoration:none;font-size:.85rem">&larr; 대시보드</a>
+  <h1>Before vs After EDA 비교</h1>
+  <p class="subtitle">알림 발송을 동기 직렬 fan-out → ApplicationEvent 비동기로 분리했을 때의 부하 테스트 영향 측정</p>
+
+  <div id="status" class="verdict-banner verdict-pending">측정 결과 로드 중...</div>
+
+  <div class="meta-grid">
+    <div class="meta-card before">
+      <div class="meta-label">Before — 동기 직렬 fan-out</div>
+      <div class="meta-title">충전 응답에 알림 latency가 그대로 누적</div>
+      <table class="meta-table" id="meta-before"><tr><td class="key">측정일</td><td>—</td></tr></table>
+    </div>
+    <div class="meta-card after">
+      <div class="meta-label">After — ApplicationEvent 기반 EDA</div>
+      <div class="meta-title">알림 발송이 충전 트랜잭션 밖에서 비동기 처리</div>
+      <table class="meta-table" id="meta-after"><tr><td class="key">측정일</td><td>—</td></tr></table>
+    </div>
+  </div>
+
+  <div class="compare-grid" id="compare-grid"></div>
+
+  <div class="raw-section">
+    <h2>전체 metric 비교</h2>
+    <table id="raw-table">
+      <thead>
+        <tr><th>지표</th><th class="num">Before</th><th class="num">After</th><th class="num">Δ</th><th class="num">개선률</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="footer-links">
+    <a href="/comparison/before-eda/report.html">Before 원본 리포트</a>
+    <a href="/comparison/after-eda/report.html">After 원본 리포트</a>
+    <a href="/load/report.html">최신 단일 측정 리포트</a>
+  </div>
+
+<script>
+const fmt = (n, d = 2) => n === null || n === undefined ? '—' : Number(n).toFixed(d);
+const fmtMs = (n) => n === null || n === undefined ? '—' : `${fmt(n, 0)} ms`;
+const fmtPct = (n) => n === null || n === undefined ? '—' : `${fmt(n * 100, 2)}%`;
+const comma = (n) => n === null || n === undefined ? '—' : String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+async function loadSummary(path) {
+  try {
+    const res = await fetch(path);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (_) { return null; }
+}
+
+function getMetric(data, key, stat) {
+  return data?.metrics?.[key]?.values?.[stat] ?? null;
+}
+
+// 직렬화/태그된 sub-metric 형태 — k6는 tag 메트릭을 'http_req_duration{name:충전}'로 저장
+function getTagMetric(data, base, tagName, stat) {
+  const direct = data?.metrics?.[`${base}{name:${tagName}}`]?.values?.[stat];
+  if (direct !== undefined) return direct;
+  return null;
+}
+
+// 작을수록 좋은 metric — Before > After 면 개선
+const METRICS = [
+  { name: '처리량 (iterations/s)', desc: '높을수록 좋음 (초당 시나리오 완료 수)', key: 'iterations', stat: 'rate', higherIsBetter: true, fmt: (n) => fmt(n, 1) },
+  { name: 'iteration_duration p(95)', desc: '한 시나리오(충전→구매→사용) 95퍼센타일', key: 'iteration_duration', stat: 'p(95)', higherIsBetter: false, fmt: fmtMs },
+  { name: 'http_req_duration p(95)', desc: '단일 HTTP 요청 95퍼센타일 응답', key: 'http_req_duration', stat: 'p(95)', higherIsBetter: false, fmt: fmtMs },
+  { name: 'http_req_duration p(99)', desc: '단일 HTTP 요청 99퍼센타일 응답', key: 'http_req_duration', stat: 'p(99)', higherIsBetter: false, fmt: fmtMs },
+  { name: 'http_req_duration max', desc: '단일 HTTP 요청 최댓값', key: 'http_req_duration', stat: 'max', higherIsBetter: false, fmt: fmtMs },
+  { name: '실패율', desc: 'http_req_failed (낮을수록 좋음)', key: 'http_req_failed', stat: 'rate', higherIsBetter: false, fmt: fmtPct },
+];
+
+const TAG_METRICS = [
+  { name: '충전 단계 p(95)', desc: 'POST /wallets/{id}/charges (알림 fan-out 영향 직격)', tag: '충전' },
+  { name: '구매 단계 p(95)', desc: 'POST /users/{id}/gifticons', tag: '구매' },
+  { name: '사용 단계 p(95)', desc: 'POST /users/{id}/gifticons/{id}/consume', tag: '사용' },
+];
+
+function delta(before, after, higherIsBetter) {
+  if (before === null || after === null) return { abs: null, pct: null, label: '—', cls: 'delta-neutral' };
+  const abs = after - before;
+  const pct = before === 0 ? null : (after - before) / before;
+  const improved = higherIsBetter ? after > before : after < before;
+  const cls = improved ? 'delta-good' : (abs === 0 ? 'delta-neutral' : 'delta-bad');
+  return { abs, pct, improved, cls };
+}
+
+function renderMetricCard(spec, beforeVal, afterVal) {
+  const d = delta(beforeVal, afterVal, spec.higherIsBetter);
+  const max = Math.max(beforeVal ?? 0, afterVal ?? 0) || 1;
+  const beforeWidth = ((beforeVal ?? 0) / max) * 100;
+  const afterWidth = ((afterVal ?? 0) / max) * 100;
+  const sign = d.abs === null ? '' : (d.abs > 0 ? '+' : '');
+  const pctTxt = d.pct === null ? '' : ` (${sign}${fmt(d.pct * 100, 1)}%)`;
+  const arrow = d.improved === undefined ? '' : (d.improved ? '↓' : '↑');
+  return `
+    <div class="metric-card">
+      <div class="metric-name">${spec.name}</div>
+      <div class="metric-desc">${spec.desc}</div>
+      <div class="metric-row">
+        <span class="label before">Before</span>
+        <div class="bar-track"><div class="bar-fill before" style="width:${beforeWidth}%"></div></div>
+        <span class="value">${spec.fmt(beforeVal)}</span>
+      </div>
+      <div class="metric-row">
+        <span class="label after">After</span>
+        <div class="bar-track"><div class="bar-fill after" style="width:${afterWidth}%"></div></div>
+        <span class="value">${spec.fmt(afterVal)}</span>
+      </div>
+      <div class="delta">
+        <span class="${d.cls === 'delta-good' ? 'delta-good' : d.cls === 'delta-bad' ? 'delta-bad' : 'delta-neutral'}">${arrow} ${spec.fmt(Math.abs(d.abs ?? 0))}${pctTxt}</span>
+        <span style="color:#64748b;font-size:.75rem">${d.improved ? '개선' : (d.improved === false ? '악화' : '판정 불가')}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderMeta(elId, data, label) {
+  const el = document.getElementById(elId);
+  if (!data) {
+    el.innerHTML = `<tr><td class="key">상태</td><td style="color:#f87171">측정 결과 없음 — load-test/results/comparison/${label}/summary.json 확인</td></tr>`;
+    return;
+  }
+  const ts = data.state?.testRunStartedAt ?? '—';
+  const dur = data.state?.testRunDurationMs ?? 0;
+  const min = Math.floor(dur / 60000);
+  const sec = Math.floor((dur % 60000) / 1000);
+  const vusMax = getMetric(data, 'vus_max', 'max');
+  const totalIter = getMetric(data, 'iterations', 'count');
+  const totalReq = getMetric(data, 'http_reqs', 'count');
+  el.innerHTML = `
+    <tr><td class="key">측정 시각</td><td>${ts.slice(0, 19).replace('T', ' ')}</td></tr>
+    <tr><td class="key">실행 시간</td><td>${min}분 ${sec}초</td></tr>
+    <tr><td class="key">최대 VU</td><td>${comma(vusMax)}</td></tr>
+    <tr><td class="key">총 iterations</td><td>${comma(totalIter)}</td></tr>
+    <tr><td class="key">총 http 요청</td><td>${comma(totalReq)}</td></tr>
+  `;
+}
+
+function renderRawTable(before, after) {
+  const tbody = document.querySelector('#raw-table tbody');
+  const rows = [];
+  for (const spec of METRICS) {
+    const b = getMetric(before, spec.key, spec.stat);
+    const a = getMetric(after, spec.key, spec.stat);
+    const d = delta(b, a, spec.higherIsBetter);
+    const sign = d.abs === null ? '—' : (d.abs > 0 ? '+' : '');
+    const pctTxt = d.pct === null ? '—' : `${sign}${fmt(d.pct * 100, 1)}%`;
+    rows.push(`<tr>
+      <td>${spec.name}</td>
+      <td class="num">${spec.fmt(b)}</td>
+      <td class="num">${spec.fmt(a)}</td>
+      <td class="num">${d.abs === null ? '—' : sign + spec.fmt(Math.abs(d.abs))}</td>
+      <td class="num ${d.cls}">${pctTxt}</td>
+    </tr>`);
+  }
+  for (const t of TAG_METRICS) {
+    const b = getTagMetric(before, 'http_req_duration', t.tag, 'p(95)');
+    const a = getTagMetric(after, 'http_req_duration', t.tag, 'p(95)');
+    const d = delta(b, a, false);
+    const sign = d.abs === null ? '—' : (d.abs > 0 ? '+' : '');
+    const pctTxt = d.pct === null ? '—' : `${sign}${fmt(d.pct * 100, 1)}%`;
+    rows.push(`<tr>
+      <td>${t.name}</td>
+      <td class="num">${fmtMs(b)}</td>
+      <td class="num">${fmtMs(a)}</td>
+      <td class="num">${d.abs === null ? '—' : sign + fmtMs(Math.abs(d.abs))}</td>
+      <td class="num ${d.cls}">${pctTxt}</td>
+    </tr>`);
+  }
+  tbody.innerHTML = rows.join('\n');
+}
+
+(async () => {
+  const [before, after] = await Promise.all([
+    loadSummary('/comparison/before-eda/summary.json'),
+    loadSummary('/comparison/after-eda/summary.json'),
+  ]);
+
+  renderMeta('meta-before', before, 'before-eda');
+  renderMeta('meta-after', after, 'after-eda');
+
+  const status = document.getElementById('status');
+  if (!before && !after) {
+    status.className = 'verdict-banner verdict-pending';
+    status.textContent = '아직 두 측정 결과가 모두 없습니다. ./run-test.sh load 후 결과를 comparison/{before-eda|after-eda}/ 로 백업하세요.';
+  } else if (!before) {
+    status.className = 'verdict-banner verdict-warn';
+    status.textContent = 'After 측정만 존재 — Before(동기 직렬) 측정 결과가 필요합니다.';
+  } else if (!after) {
+    status.className = 'verdict-banner verdict-warn';
+    status.textContent = 'Before 측정만 존재 — After(EDA) 측정 결과가 필요합니다.';
+  } else {
+    const beforeP95 = getMetric(before, 'http_req_duration', 'p(95)');
+    const afterP95 = getMetric(after, 'http_req_duration', 'p(95)');
+    const improvedPct = beforeP95 ? ((beforeP95 - afterP95) / beforeP95) * 100 : 0;
+    if (improvedPct >= 20) {
+      status.className = 'verdict-banner verdict-pass';
+      status.textContent = `EDA 적용으로 http p95 ${fmt(improvedPct, 1)}% 개선 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)})`;
+    } else if (improvedPct >= 0) {
+      status.className = 'verdict-banner verdict-warn';
+      status.textContent = `EDA 적용 후 http p95 변화 미미 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)}, ${fmt(improvedPct, 1)}%)`;
+    } else {
+      status.className = 'verdict-banner verdict-fail';
+      status.textContent = `EDA 적용 후 http p95 악화 (${fmtMs(beforeP95)} → ${fmtMs(afterP95)})`;
+    }
+  }
+
+  const grid = document.getElementById('compare-grid');
+  const cards = [];
+  for (const spec of METRICS) {
+    cards.push(renderMetricCard(spec, getMetric(before, spec.key, spec.stat), getMetric(after, spec.key, spec.stat)));
+  }
+  for (const t of TAG_METRICS) {
+    cards.push(renderMetricCard(
+      { name: t.name, desc: t.desc, higherIsBetter: false, fmt: fmtMs },
+      getTagMetric(before, 'http_req_duration', t.tag, 'p(95)'),
+      getTagMetric(after, 'http_req_duration', t.tag, 'p(95)'),
+    ));
+  }
+  grid.innerHTML = cards.join('\n');
+
+  renderRawTable(before, after);
+})();
+</script>
+
+</body>
+</html>
