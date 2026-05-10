@@ -27,7 +27,7 @@
 docker compose up --build
 ```
 
-`http://localhost:8080` 에서 API 서버가 실행됩니다.
+`http://localhost:19080` 에서 API 서버가 실행됩니다.
 
 ### 테스트
 
@@ -83,39 +83,40 @@ Base path: `/api`
 
 ```bash
 # 1. 유저 생성
-curl -s -X POST http://localhost:8080/api/users \
+curl -s -X POST http://localhost:19080/api/users \
   -H 'Content-Type: application/json' \
-  -d '{"name": "gonza"}'
+  -d '{"name": "gonza", "phoneNumber": "01000000000", "email": "gonza@example.com"}'
 # -> {"userId": "<USER_ID>"}
 
 # 2. 상품 등록
-curl -s -X POST http://localhost:8080/api/products \
+curl -s -X POST http://localhost:19080/api/products \
   -H 'Content-Type: application/json' \
   -d '{"name": "스타벅스 아메리카노", "price": 4500}'
 # -> {"id": "<PRODUCT_ID>", ...}
 
 # 3. 포인트 충전
-curl -s -X POST http://localhost:8080/api/wallets/<USER_ID>/charges \
+curl -s -X POST http://localhost:19080/api/wallets/<USER_ID>/charges \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: charge-001' \
   -d '{"amount": 10000}'
 # -> {"chargeId": "...", "status": "COMPLETED", "balance": 10000}
 
 # 4. 같은 키로 재호출 (멱등성 확인 - 잔액 변화 없음)
-curl -s -X POST http://localhost:8080/api/wallets/<USER_ID>/charges \
+curl -s -X POST http://localhost:19080/api/wallets/<USER_ID>/charges \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: charge-001' \
   -d '{"amount": 10000}'
 # -> {"chargeId": "...", "status": "COMPLETED", "balance": 10000}
 
 # 5. 기프티콘 구매
-curl -s -X POST http://localhost:8080/api/users/<USER_ID>/gifticons \
+curl -s -X POST http://localhost:19080/api/users/<USER_ID>/gifticons \
   -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: gifticon-001' \
   -d '{"productId": "<PRODUCT_ID>"}'
 # -> {"gifticonId": "<GIFTICON_ID>", "code": "...", "status": "ISSUED", "balance": 5500}
 
 # 6. 기프티콘 사용
-curl -s -X POST http://localhost:8080/api/users/<USER_ID>/gifticons/<GIFTICON_ID>/consume
+curl -s -X POST http://localhost:19080/api/users/<USER_ID>/gifticons/<GIFTICON_ID>/consume
 # -> {"gifticonId": "...", "status": "CONSUMED"}
 ```
 
